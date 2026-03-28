@@ -15,7 +15,7 @@ const formatCoins = (n: number) => {
 
 const Index = () => {
   const { profile, logout } = useAuth();
-  const { alerts, todayCount } = useAlerts();
+  const { alerts, activeAlerts, todayCount } = useAlerts();
   const [tab, setTab] = useState<"common" | "dynamic">("common");
   const [selectedBet, setSelectedBet] = useState<BetTemplate | null>(null);
 
