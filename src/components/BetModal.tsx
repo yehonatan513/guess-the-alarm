@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { BetTemplate } from "@/lib/bets-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,7 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
       resolved_at: null,
     });
     await updateCoins(profile.coins - amount);
+    toast.success("ההימור נרשם! 🎰", { description: `${formatNum(amount)} מטבעות על ${bet.title}` });
     setAmount(0);
     onClose();
   };

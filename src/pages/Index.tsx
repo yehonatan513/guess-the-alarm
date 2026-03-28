@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAlerts } from "@/hooks/useAlerts";
+import { useBetResolution } from "@/hooks/useBetResolution";
 import { BETS, BetTemplate } from "@/lib/bets-data";
 import BetModal from "@/components/BetModal";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ const Index = () => {
   const { profile, logout } = useAuth();
   const { alerts, activeAlerts, todayCount } = useAlerts();
   const [tab, setTab] = useState<"common" | "dynamic">("common");
+  useBetResolution();
   const [selectedBet, setSelectedBet] = useState<BetTemplate | null>(null);
 
   const filtered = BETS.filter((b) => b.category === tab);
