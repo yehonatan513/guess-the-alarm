@@ -45,16 +45,25 @@ export function useAlerts() {
       }
 
       const allAlerts: Alert[] = [];
-      let totalCount = 0;
+      let todayCount = 0;
+
+      // Midnight of today (local time) as Unix timestamp seconds
+      const now = new Date();
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+
       if (data.history && Array.isArray(data.history)) {
         data.history.forEach((group: any) => {
           if (group.alerts && Array.isArray(group.alerts)) {
-            totalCount += group.alerts.length;
             group.alerts.forEach((a: any, i: number) => {
+              const alertTimeSec: number = a.time ?? 0;
+              // Only count alert if it happened today (after local midnight)
+              if (alertTimeSec >= todayMidnight) {
+                todayCount++;
+              }
               allAlerts.push({
                 id: `hist-${group.id || 0}-${i}`,
                 areas: Array.isArray(a.cities) ? a.cities : [a.cities || "אזור לא ידוע"],
-                time: a.time ? new Date(a.time * 1000).toISOString() : new Date().toISOString(),
+                time: alertTimeSec ? new Date(alertTimeSec * 1000).toISOString() : new Date().toISOString(),
                 type: a.threat === 0 ? "missiles" : String(a.threat),
               });
             });
@@ -65,7 +74,7 @@ export function useAlerts() {
       setState({
         alerts: allAlerts.slice(0, 30),
         activeAlerts,
-        todayCount: totalCount,
+        todayCount,
         error: null,
         lastUpdated: new Date(),
       });

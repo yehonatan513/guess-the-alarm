@@ -6,6 +6,7 @@ import { useBetResolution } from "@/hooks/useBetResolution";
 import { BETS, BetTemplate } from "@/lib/bets-data";
 import BetModal from "@/components/BetModal";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { he } from "date-fns/locale";
 
@@ -37,13 +38,36 @@ const Index = () => {
             <span className="text-primary font-black text-xl">{profile ? formatCoins(profile.coins) : "0"}</span>
           </div>
           <h1 className="text-primary font-black text-sm tracking-widest">GUESS THE ALARM</h1>
-          <button
-            onClick={toggleTheme}
-            className="text-xl w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all duration-200 active:scale-90"
-            title={theme === "dark" ? "עבור למצב בהיר" : "עבור למצב כהה"}
-          >
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={async () => {
+                const shareData = {
+                  title: "Guess The Alarm 🚀",
+                  text: "בוא להמר על אזעקות! 🎰🚨",
+                  url: window.location.origin,
+                };
+                try {
+                  if (navigator.share) {
+                    await navigator.share(shareData);
+                  } else {
+                    await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
+                    toast.success("הקישור הועתק! 📋");
+                  }
+                } catch { /* user cancelled share */ }
+              }}
+              className="text-xl w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all duration-200 active:scale-90"
+              title="שתף את האתר"
+            >
+              🔗
+            </button>
+            <button
+              onClick={toggleTheme}
+              className="text-xl w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all duration-200 active:scale-90"
+              title={theme === "dark" ? "עבור למצב בהיר" : "עבור למצב כהה"}
+            >
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
+          </div>
         </div>
         <div className="flex justify-between items-center max-w-lg mx-auto mt-1">
           <span className="text-muted-foreground text-xs">{profile?.avatar_emoji} {profile?.username}</span>

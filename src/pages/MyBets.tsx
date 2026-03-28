@@ -3,9 +3,11 @@ import { ref, query, orderByChild, equalTo, onValue } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
+import { parseBetId } from "@/lib/bet-generator";
 
 interface Bet {
   id: string;
+  type: string;
   description: string;
   amount: number;
   multiplier: number;
@@ -16,15 +18,90 @@ interface Bet {
 
 const formatCoins = (n: number) => n.toLocaleString("he-IL");
 
+// Calculate when an open bet expires, returns a label like "נסגר בעוד 3:42" or null
+function getBetExpiry(bet: Bet): string | null {
+  const now = new Date();
+  const created = new Date(bet.created_at).getTime();
+
+  // Dynamic bet — parse the encoded ID
+  if (bet.type.includes("|")) {
+    const parsed = parseBetId(bet.type);
+    if (!parsed) return null;
+
+    switch (parsed.type) {
+      case "night": {
+        // Resolves at 06:00 today if placed before 06:00, else 06:00 tomorrow
+        const six = new Date(now);
+        six.setHours(6, 0, 0, 0);
+        if (six.getTime() <= now.getTime()) six.setDate(six.getDate() + 1);
+        return msToLabel(six.getTime() - now.getTime());
+      }
+      case "quiet": {
+        const end = created + (parsed.minutes! * 60 * 1000);
+        if (end <= now.getTime()) return "ממתין לפסיקה";
+        return msToLabel(end - now.getTime());
+      }
+      case "overunder":
+      case "total": {
+        // Resolves at 23:00 today
+        const cutoff = new Date(now);
+        cutoff.setHours(23, 0, 0, 0);
+        if (cutoff.getTime() <= now.getTime()) cutoff.setDate(cutoff.getDate() + 1);
+        return msToLabel(cutoff.getTime() - now.getTime());
+      }
+    }
+  }
+
+  // Static bets — use their known logic
+  switch (bet.type) {
+    case "b1": {
+      const six = new Date(now);
+      six.setHours(6, 0, 0, 0);
+      if (six.getTime() <= now.getTime()) six.setDate(six.getDate() + 1);
+      return msToLabel(six.getTime() - now.getTime());
+    }
+    case "b4":    // quiet 1h
+    case "b10":   // alert in 5m
+    case "b16": { // quiet 30m
+      const durations: Record<string, number> = { b4: 3600, b10: 300, b16: 1800 };
+      const end = created + (durations[bet.type] * 1000);
+      if (end <= now.getTime()) return "ממתין לפסיקה";
+      return msToLabel(end - now.getTime());
+    }
+    default: {
+      // Most static bets expire at 23:00
+      const cutoff = new Date(now);
+      cutoff.setHours(23, 0, 0, 0);
+      if (cutoff.getTime() <= now.getTime()) cutoff.setDate(cutoff.getDate() + 1);
+      return msToLabel(cutoff.getTime() - now.getTime());
+    }
+  }
+}
+
+function msToLabel(ms: number): string {
+  if (ms <= 0) return "ממתין לפסיקה";
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 const MyBets = () => {
   const { user } = useAuth();
   const [bets, setBets] = useState<Bet[]>([]);
   const [tab, setTab] = useState<"open" | "history">("open");
+  const [, setTick] = useState(0);
+
+  // Tick every second so the countdown updates live
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
-
-    // Real-time listener instead of one-time get()
     const betsRef = query(ref(db, "bets"), orderByChild("uid"), equalTo(user.uid));
     const unsub = onValue(betsRef, (snap) => {
       if (snap.exists()) {
@@ -36,7 +113,6 @@ const MyBets = () => {
         setBets([]);
       }
     });
-
     return () => unsub();
   }, [user]);
 
@@ -58,7 +134,7 @@ const MyBets = () => {
               tab === "open" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
             }`}
           >
-            פתוחים
+            פתוחים {bets.filter(b => b.status === "open").length > 0 && `(${bets.filter(b => b.status === "open").length})`}
           </button>
           <button
             onClick={() => setTab("history")}
@@ -78,39 +154,61 @@ const MyBets = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map((bet, i) => (
-              <div
-                key={bet.id}
-                className="bg-card border border-border rounded-xl p-4 space-y-2 animate-fadeIn"
-                style={{ animationDelay: `${i * 60}ms` }}
-              >
-                <div className="flex justify-between items-start">
-                  <Badge
-                    variant={
-                      bet.status === "open"
-                        ? "secondary"
-                        : bet.status === "won"
-                        ? "default"
-                        : "destructive"
-                    }
-                    className="text-xs"
-                  >
-                    {bet.status === "open" && "פתוח"}
-                    {bet.status === "won" && "ניצחון! 🏆"}
-                    {bet.status === "lost" && "הפסד ✗"}
-                  </Badge>
-                  <span className="text-primary font-black text-sm">x{bet.multiplier}</span>
+            {filtered.map((bet, i) => {
+              const expiry = bet.status === "open" ? getBetExpiry(bet) : null;
+              const isUrgent = expiry && !expiry.includes("ממתין") && expiry.startsWith("0:");
+
+              return (
+                <div
+                  key={bet.id}
+                  className="bg-card border border-border rounded-xl p-4 space-y-2 animate-fadeIn"
+                  style={{ animationDelay: `${i * 60}ms` }}
+                >
+                  <div className="flex justify-between items-start">
+                    <Badge
+                      variant={
+                        bet.status === "open"
+                          ? "secondary"
+                          : bet.status === "won"
+                          ? "default"
+                          : "destructive"
+                      }
+                      className="text-xs"
+                    >
+                      {bet.status === "open" && "פתוח"}
+                      {bet.status === "won" && "ניצחון! 🏆"}
+                      {bet.status === "lost" && "הפסד ✗"}
+                    </Badge>
+                    <span className="text-primary font-black text-sm">x{bet.multiplier}</span>
+                  </div>
+
+                  <p className="text-foreground text-sm font-bold">{bet.description}</p>
+
+                  <div className="flex justify-between items-center text-xs text-muted-foreground">
+                    <span>🪙 {formatCoins(bet.amount)}</span>
+                    <span>{new Date(bet.created_at).toLocaleDateString("he-IL")}</span>
+                  </div>
+
+                  {/* Expiry countdown for open bets */}
+                  {expiry && (
+                    <div className={`flex items-center gap-1.5 text-xs font-mono font-bold px-2 py-1 rounded-lg w-fit ${
+                      isUrgent
+                        ? "bg-destructive/15 text-destructive"
+                        : expiry === "ממתין לפסיקה"
+                        ? "bg-muted text-muted-foreground"
+                        : "bg-primary/10 text-primary"
+                    }`}>
+                      <span>{expiry === "ממתין לפסיקה" ? "⏳" : isUrgent ? "🔴" : "⏱️"}</span>
+                      <span>{expiry === "ממתין לפסיקה" ? expiry : `נסגר בעוד ${expiry}`}</span>
+                    </div>
+                  )}
+
+                  {bet.status === "won" && (
+                    <p className="text-primary font-bold text-sm">+{formatCoins(bet.coins_won)} 🪙</p>
+                  )}
                 </div>
-                <p className="text-foreground text-sm font-bold">{bet.description}</p>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>🪙 {formatCoins(bet.amount)}</span>
-                  <span>{new Date(bet.created_at).toLocaleDateString("he-IL")}</span>
-                </div>
-                {bet.status === "won" && (
-                  <p className="text-primary font-bold text-sm">+{formatCoins(bet.coins_won)} 🪙</p>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
