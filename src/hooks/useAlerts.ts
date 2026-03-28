@@ -33,24 +33,25 @@ export function useAlerts() {
           setActiveAlerts([]);
         }
 
-        // History
+        // History - flatten nested alerts from history groups
         if (data.history && Array.isArray(data.history)) {
-          setTodayCount(data.history.length);
-          const historyAlerts: Alert[] = data.history.slice(0, 30).map((a: any, i: number) => ({
-            id: `hist-${a.alertDate || a.date || i}-${i}`,
-            areas: a.data
-              ? (Array.isArray(a.data) ? a.data : a.data.split(", "))
-              : a.cities
-              ? (Array.isArray(a.cities) ? a.cities : [a.cities])
-              : [a.title || "אזור לא ידוע"],
-            time: a.alertDate
-              ? new Date(a.alertDate).toISOString()
-              : a.date
-              ? new Date(a.date).toISOString()
-              : new Date().toISOString(),
-            type: a.cat || a.category || "missiles",
-          }));
-          setAlerts(historyAlerts);
+          const allAlerts: Alert[] = [];
+          let totalCount = 0;
+          data.history.forEach((group: any) => {
+            if (group.alerts && Array.isArray(group.alerts)) {
+              totalCount += group.alerts.length;
+              group.alerts.forEach((a: any, i: number) => {
+                allAlerts.push({
+                  id: `hist-${group.id || 0}-${i}`,
+                  areas: Array.isArray(a.cities) ? a.cities : [a.cities || "אזור לא ידוע"],
+                  time: a.time ? new Date(a.time * 1000).toISOString() : new Date().toISOString(),
+                  type: a.threat === 0 ? "missiles" : String(a.threat),
+                });
+              });
+            }
+          });
+          setTodayCount(totalCount);
+          setAlerts(allAlerts.slice(0, 30));
         }
       } catch {}
     };
