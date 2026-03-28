@@ -24,7 +24,6 @@ const Index = () => {
 
   // Pass alert data so useBetResolution doesn't need its own useAlerts() instance
   useBetResolution({ alerts, activeAlerts, todayCount });
-
   const [selectedBet, setSelectedBet] = useState<BetTemplate | null>(null);
   const filtered = BETS.filter((b) => b.category === tab);
 

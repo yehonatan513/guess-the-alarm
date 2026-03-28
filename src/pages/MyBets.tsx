@@ -3,7 +3,7 @@ import { ref, query, orderByChild, equalTo, onValue } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
-import { parseBetId } from "@/lib/bet-generator";
+import { getBetEndTime } from "@/lib/bet-generator";
 
 interface Bet {
   id: string;
@@ -20,62 +20,12 @@ const formatCoins = (n: number) => n.toLocaleString("he-IL");
 
 // Calculate when an open bet expires, returns a label like "נסגר בעוד 3:42" or null
 function getBetExpiry(bet: Bet): string | null {
-  const now = new Date();
+  const now = new Date().getTime();
   const created = new Date(bet.created_at).getTime();
+  const end = getBetEndTime(bet.type, created);
 
-  // Dynamic bet — parse the encoded ID
-  if (bet.type.includes("|")) {
-    const parsed = parseBetId(bet.type);
-    if (!parsed) return null;
-
-    switch (parsed.type) {
-      case "night": {
-        // Resolves at 06:00 today if placed before 06:00, else 06:00 tomorrow
-        const six = new Date(now);
-        six.setHours(6, 0, 0, 0);
-        if (six.getTime() <= now.getTime()) six.setDate(six.getDate() + 1);
-        return msToLabel(six.getTime() - now.getTime());
-      }
-      case "quiet": {
-        const end = created + (parsed.minutes! * 60 * 1000);
-        if (end <= now.getTime()) return "ממתין לפסיקה";
-        return msToLabel(end - now.getTime());
-      }
-      case "overunder":
-      case "total": {
-        // Resolves at 23:00 today
-        const cutoff = new Date(now);
-        cutoff.setHours(23, 0, 0, 0);
-        if (cutoff.getTime() <= now.getTime()) cutoff.setDate(cutoff.getDate() + 1);
-        return msToLabel(cutoff.getTime() - now.getTime());
-      }
-    }
-  }
-
-  // Static bets — use their known logic
-  switch (bet.type) {
-    case "b1": {
-      const six = new Date(now);
-      six.setHours(6, 0, 0, 0);
-      if (six.getTime() <= now.getTime()) six.setDate(six.getDate() + 1);
-      return msToLabel(six.getTime() - now.getTime());
-    }
-    case "b4":    // quiet 1h
-    case "b10":   // alert in 5m
-    case "b16": { // quiet 30m
-      const durations: Record<string, number> = { b4: 3600, b10: 300, b16: 1800 };
-      const end = created + (durations[bet.type] * 1000);
-      if (end <= now.getTime()) return "ממתין לפסיקה";
-      return msToLabel(end - now.getTime());
-    }
-    default: {
-      // Most static bets expire at 23:00
-      const cutoff = new Date(now);
-      cutoff.setHours(23, 0, 0, 0);
-      if (cutoff.getTime() <= now.getTime()) cutoff.setDate(cutoff.getDate() + 1);
-      return msToLabel(cutoff.getTime() - now.getTime());
-    }
-  }
+  if (end <= now) return "ממתין לפסיקה";
+  return msToLabel(end - now);
 }
 
 function msToLabel(ms: number): string {

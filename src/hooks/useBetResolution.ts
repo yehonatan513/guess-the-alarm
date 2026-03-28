@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { ref, get, update } from "firebase/database";
+import { ref, get, update, query, orderByChild, equalTo } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { parseBetId, alertMatchesLocation } from "@/lib/bet-generator";
+import { parseBetId, alertMatchesLocation, getBetEndTime } from "@/lib/bet-generator";
 
 interface Alert {
   id: string;
@@ -66,7 +66,9 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
       const todayCount = todayCountRef.current;
 
       try {
-        const snap = await get(ref(db, "bets"));
+        // Use a query to fetch only the current user's bets instead of the entire database
+        const betsRef = query(ref(db, "bets"), orderByChild("uid"), equalTo(user.uid));
+        const snap = await get(betsRef);
         if (!snap.exists()) { processingRef.current = false; return; }
 
         const bets = snap.val() as Record<string, FirebaseBet>;
@@ -78,23 +80,25 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
         let losses = 0;
 
         for (const [betId, bet] of Object.entries(bets)) {
-          if (bet.uid !== user.uid || bet.status !== "open") continue;
+          if (bet.status !== "open") continue;
 
           let result: "win" | "loss" | null = null;
+          const betCreatedMs = new Date(bet.created_at).getTime();
+          const endTime = getBetEndTime(bet.type, betCreatedMs);
+          const isExpired = now.getTime() >= endTime;
 
           switch (bet.type) {
             case "b2": {
               if (todayCount > 20) result = "win";
-              else if (hour >= 23) result = "loss";
+              else if (isExpired) result = "loss";
               break;
             }
             case "b1": {
               if (hour >= 0 && hour < 6) {
                 const allCities = activeAlerts.flatMap(a => a.areas);
                 if (allCities.some(c => c.includes("שומר"))) result = "win";
-              } else if (hour >= 6) {
-                const betDate = new Date(bet.created_at);
-                if (betDate.toDateString() === now.toDateString()) result = "loss";
+              } else if (isExpired) {
+                result = "loss";
               }
               break;
             }
@@ -108,60 +112,40 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
                 )
               );
               if (centralCities.length > 10) result = "win";
-              else if (hour >= 23) result = "loss";
+              else if (isExpired) result = "loss";
               break;
             }
-            case "b4": {
-              const betCreated = new Date(bet.created_at).getTime();
-              const oneHourAfter = betCreated + 60 * 60 * 1000;
-              if (now.getTime() > oneHourAfter) {
+            case "b4":
+            case "b10":
+            case "b16": {
+              const delay = bet.type === "b4" ? 60 : bet.type === "b10" ? 5 : 30;
+              if (isExpired) {
                 const alertsDuringPeriod = alerts.filter(a => {
                   const t = new Date(a.time).getTime();
-                  return t > betCreated && t < oneHourAfter;
+                  return t > betCreatedMs && t < endTime;
                 });
-                result = alertsDuringPeriod.length === 0 ? "win" : "loss";
-              }
-              break;
-            }
-            case "b10": {
-              const betCreated = new Date(bet.created_at).getTime();
-              const fiveMin = betCreated + 5 * 60 * 1000;
-              if (now.getTime() > fiveMin) {
-                const alertsDuring = alerts.filter(a => {
-                  const t = new Date(a.time).getTime();
-                  return t > betCreated && t < fiveMin;
-                });
-                result = alertsDuring.length > 0 ? "win" : "loss";
-              }
-              break;
-            }
-            case "b16": {
-              const betCreated = new Date(bet.created_at).getTime();
-              const thirtyMin = betCreated + 30 * 60 * 1000;
-              if (now.getTime() > thirtyMin) {
-                const alertsDuring = alerts.filter(a => {
-                  const t = new Date(a.time).getTime();
-                  return t > betCreated && t < thirtyMin;
-                });
-                result = alertsDuring.length === 0 ? "win" : "loss";
+                if (bet.type === "b10") {
+                   result = alertsDuringPeriod.length > 0 ? "win" : "loss";
+                } else {
+                   result = alertsDuringPeriod.length === 0 ? "win" : "loss";
+                }
               }
               break;
             }
             case "b25": {
               if (todayCount > 50) result = "win";
-              else if (hour >= 23) result = "loss";
+              else if (isExpired) result = "loss";
               break;
             }
             case "b26": {
               if (todayCount > 100) result = "win";
-              else if (hour >= 23) result = "loss";
+              else if (isExpired) result = "loss";
               break;
             }
             case "b14": {
               const allCities = [...alerts, ...activeAlerts].flatMap(a => a.areas);
-              const betCreated = new Date(bet.created_at);
               if (allCities.some(c => c.includes("תל אביב"))) result = "win";
-              else if (hour >= 23 && betCreated.toDateString() === now.toDateString()) result = "loss";
+              else if (isExpired) result = "loss";
               break;
             }
             default: {
@@ -180,20 +164,18 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
                       const count = countInLocation();
                       if (parsed.direction === "over") {
                         if (count > parsed.threshold!) result = "win";
-                        else if (hour >= 23) result = "loss";
+                        else if (isExpired) result = "loss";
                       } else {
                         if (count >= parsed.threshold!) result = "loss";
-                        else if (hour >= 23) result = "win";
+                        else if (isExpired) result = "win";
                       }
                       break;
                     }
                     case "quiet": {
-                      const betCreated = new Date(bet.created_at).getTime();
-                      const endTime = betCreated + (parsed.minutes! * 60 * 1000);
-                      if (now.getTime() > endTime) {
+                      if (isExpired) {
                         const hasAlert = alerts.some(a => {
                           const t = new Date(a.time).getTime();
-                          return t > betCreated && t < endTime && matchAlert(a.areas);
+                          return t > betCreatedMs && t < endTime && matchAlert(a.areas);
                         });
                         result = hasAlert ? "loss" : "win";
                       }
@@ -203,14 +185,13 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
                       if (hour >= 0 && hour < 6) {
                         const hasNight = activeAlerts.some(a => matchAlert(a.areas));
                         if (hasNight) result = "win";
-                      } else if (hour >= 6) {
-                        const betDate = new Date(bet.created_at);
-                        if (betDate.toDateString() === now.toDateString()) result = "loss";
+                      } else if (isExpired) {
+                        result = "loss";
                       }
                       break;
                     }
                     case "total": {
-                      if (hour >= 23) {
+                      if (isExpired) {
                         const count = countInLocation();
                         const { min, max } = parsed;
                         const inRange = count >= min! && (max === null || count <= max!);
@@ -220,12 +201,8 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
                     }
                   }
                 }
-              } else if (hour >= 23) {
-                // Unknown static bet — expire at end of day
-                const betCreated = new Date(bet.created_at);
-                if (betCreated.toDateString() !== now.toDateString()) {
-                  result = "loss";
-                }
+              } else if (isExpired) {
+                result = "loss";
               }
               break;
             }

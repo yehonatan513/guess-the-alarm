@@ -36,7 +36,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = useCallback(async (uid: string) => {
     const snap = await get(ref(db, `users/${uid}`));
     if (snap.exists()) {
-      setProfile(snap.val());
+      const data = snap.val() as UserProfile;
+
+      // ── One-time migration: reset old 500M default to 1M ──
+      const OLD_DEFAULT = 500_000_000;
+      if (data.coins === OLD_DEFAULT) {
+        const newCoins = 1_000_000;
+        await set(ref(db, `users/${uid}/coins`), newCoins);
+        await set(ref(db, `leaderboard/${uid}/coins`), newCoins);
+        data.coins = newCoins;
+      }
+      // ─────────────────────────────────────────────────────
+
+      setProfile(data);
       setNeedsUsername(false);
     } else {
       setNeedsUsername(true);

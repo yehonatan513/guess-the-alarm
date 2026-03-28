@@ -15,7 +15,7 @@ interface AlertsState {
   lastUpdated: Date | null;
 }
 
-const PROXY_URL = "https://cvokdzmibrxadrpiczow.supabase.co/functions/v1/fetch-alerts";
+const PROXY_URL = import.meta.env.VITE_PROXY_URL || "https://cvokdzmibrxadrpiczow.supabase.co/functions/v1/fetch-alerts";
 
 export function useAlerts() {
   const [state, setState] = useState<AlertsState>({

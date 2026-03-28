@@ -16,7 +16,7 @@ const UsernameModal = () => {
     if (!user || !username.trim()) return;
     const profile = {
       username: username.trim(),
-      coins: 500000000,
+      coins: 1_000_000,
       avatar_emoji: emoji,
       created_at: new Date().toISOString(),
       wins: 0,
@@ -61,7 +61,7 @@ const UsernameModal = () => {
         <Button onClick={handleSave} className="w-full font-bold text-lg" disabled={!username.trim()}>
           🎮 התחל לשחק!
         </Button>
-        <p className="text-xs text-muted-foreground text-center">תקבל 500,000,000 מטבעות להתחלה!</p>
+        <p className="text-xs text-muted-foreground text-center">תקבל 1,000,000 מטבעות להתחלה!</p>
       </div>
     </div>
   );

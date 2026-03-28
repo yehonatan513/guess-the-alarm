@@ -1,15 +1,11 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { ref, get, push, set, query, orderByChild, limitToLast } from "firebase/database";
+import { ref, get, query, orderByChild, limitToLast } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { CreateGroupDialog } from "@/components/profile/CreateGroupDialog";
+import { JoinGroupDialog } from "@/components/profile/JoinGroupDialog";
+import { GroupDetailDialog } from "@/components/profile/GroupDetailDialog";
 
 interface LeaderboardEntry {
   uid: string;
@@ -37,8 +33,6 @@ const Profile = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
-  const [newGroupName, setNewGroupName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [tab, setTab] = useState<"profile" | "groups" | "leaderboard">("profile");
   const [loadingLeaders, setLoadingLeaders] = useState(false);
@@ -84,39 +78,7 @@ const Profile = () => {
     fetchGroups();
   }, [fetchLeaderboard, fetchGroups]);
 
-  const handleCreateGroup = async () => {
-    if (!user || !profile || !newGroupName.trim()) return;
-    const newRef = push(ref(db, "groups"));
-    await set(newRef, {
-      name: newGroupName.trim(),
-      created_by: user.uid,
-      members: {
-        [user.uid]: {
-          username: profile.username,
-          avatar_emoji: profile.avatar_emoji,
-          coins: profile.coins,
-        },
-      },
-    });
-    setNewGroupName("");
-    setShowCreate(false);
-    fetchGroups();
-  };
 
-  const handleJoinGroup = async () => {
-    if (!user || !profile || !joinCode.trim()) return;
-    const snap = await get(ref(db, `groups/${joinCode.trim()}`));
-    if (snap.exists()) {
-      await set(ref(db, `groups/${joinCode.trim()}/members/${user.uid}`), {
-        username: profile.username,
-        avatar_emoji: profile.avatar_emoji,
-        coins: profile.coins,
-      });
-      setJoinCode("");
-      setShowJoin(false);
-      fetchGroups();
-    }
-  };
 
   const getGroupMembers = (group: Group) => {
     if (!group.members) return [];
@@ -254,84 +216,9 @@ const Profile = () => {
         )}
       </div>
 
-      {/* Create Group Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="bg-card border-border max-w-sm mx-auto">
-          <DialogHeader>
-            <DialogTitle className="text-foreground text-right">➕ צור קבוצה חדשה</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              placeholder="שם הקבוצה..."
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              className="bg-secondary border-border text-foreground text-right"
-            />
-            <Button onClick={handleCreateGroup} className="w-full font-bold" disabled={!newGroupName.trim()}>
-              צור קבוצה
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Join Group Dialog */}
-      <Dialog open={showJoin} onOpenChange={setShowJoin}>
-        <DialogContent className="bg-card border-border max-w-sm mx-auto">
-          <DialogHeader>
-            <DialogTitle className="text-foreground text-right">🔗 הצטרף לקבוצה</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              placeholder="קוד קבוצה..."
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-              className="bg-secondary border-border text-foreground text-right"
-              dir="ltr"
-            />
-            <p className="text-muted-foreground text-xs">קבל את קוד הקבוצה ממנהל הקבוצה</p>
-            <Button onClick={handleJoinGroup} className="w-full font-bold" disabled={!joinCode.trim()}>
-              הצטרף
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Group Detail Dialog */}
-      <Dialog open={!!selectedGroup} onOpenChange={() => setSelectedGroup(null)}>
-        <DialogContent className="bg-card border-border max-w-sm mx-auto">
-          <DialogHeader>
-            <DialogTitle className="text-foreground text-right">
-              👥 {selectedGroup?.name}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="bg-secondary rounded-lg p-3 text-center">
-              <p className="text-muted-foreground text-xs mb-1">קוד הקבוצה (שתף עם חברים)</p>
-              <p className="text-primary font-mono font-bold text-sm select-all">{selectedGroup?.id}</p>
-            </div>
-            <h3 className="text-foreground font-bold text-sm">🏆 דירוג הקבוצה</h3>
-            <div className="bg-secondary/50 rounded-xl overflow-hidden">
-              {selectedGroup && getGroupMembers(selectedGroup).map((m, i) => (
-                <div
-                  key={m.uid}
-                  className={`flex items-center justify-between px-4 py-3 border-b border-border last:border-0 ${
-                    m.uid === user?.uid ? "bg-primary/10" : ""
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-muted-foreground font-bold text-sm w-6">
-                      {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
-                    </span>
-                    <span className="text-lg">{m.avatar_emoji}</span>
-                    <span className="text-foreground text-sm font-medium">{m.username}</span>
-                  </div>
-                  <span className="text-primary font-black text-sm">{formatCoins(m.coins)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CreateGroupDialog open={showCreate} onOpenChange={setShowCreate} onSuccess={fetchGroups} />
+      <JoinGroupDialog open={showJoin} onOpenChange={setShowJoin} onSuccess={fetchGroups} />
+      <GroupDetailDialog group={selectedGroup} onClose={() => setSelectedGroup(null)} />
     </div>
   );
 };
