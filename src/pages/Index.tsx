@@ -15,7 +15,7 @@ const formatCoins = (n: number) => {
 
 const Index = () => {
   const { profile, logout } = useAuth();
-  const { alerts, todayCount } = useAlerts();
+  const { alerts, activeAlerts, todayCount } = useAlerts();
   const [tab, setTab] = useState<"common" | "dynamic">("common");
   const [selectedBet, setSelectedBet] = useState<BetTemplate | null>(null);
 
@@ -39,6 +39,16 @@ const Index = () => {
       </div>
 
       <div className="max-w-lg mx-auto px-4 space-y-4 mt-4">
+        {/* Active alert banner */}
+        {activeAlerts.length > 0 && (
+          <div className="bg-destructive border border-destructive rounded-lg p-3 text-center animate-pulse">
+            <p className="text-destructive-foreground text-sm font-black">🚨 אזעקה פעילה!</p>
+            <p className="text-destructive-foreground text-xs mt-1">
+              {activeAlerts.flatMap((a) => a.areas).join(", ")}
+            </p>
+          </div>
+        )}
+
         {/* Warning */}
         <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-2 text-center">
           <p className="text-destructive text-xs font-bold">⚠️ לא כסף אמיתי - לבידור בלבד</p>
