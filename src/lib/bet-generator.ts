@@ -1,0 +1,339 @@
+// ── Locations ────────────────────────────────────────────────────────────────
+// Comprehensive list of Israeli cities & towns relevant to alert betting.
+// Sorted alphabetically in Hebrew. No duplicates.
+
+export const CITIES = [
+  // א
+  "אבו גוש", "אופקים", "אור הנר", "אור יהודה", "אור עקיבא",
+  "אילת", "אלעד", "אריאל", "אשדוד", "אשקלון",
+  // ב
+  "באר שבע", "באר יעקב", "בארי", "בית שאן", "בית שמש",
+  "ביתר עילית", "בני ברק", "בת ים",
+  // ג
+  "גבעת זאב", "גבעת שמואל", "גבעתיים", "גדרה", "גן יבנה",
+  // ד
+  "דימונה",
+  // ה
+  "הוד השרון", "הרצליה",
+  // ז
+  "זיקים", "זכרון יעקב",
+  // ח
+  "חדרה", "חולון", "חיפה",
+  // ט
+  "טבריה", "טייבה", "טירה", "טירת כרמל",
+  // י
+  "יבנה", "יהוד-מונוסון", "יוקנעם עילית", "ירושלים", "ירוחם",
+  // כ
+  "כיסופים", "כפר יונה", "כפר סבא", "כפר עזה", "כרמיאל", "כרמיה",
+  // ל
+  "לוד", "לקיה",
+  // מ
+  "מבשרת ציון", "מגדל העמק", "מודיעין-מכבים-רעות", "מודיעין עילית",
+  "מזכרת בתיה", "מטולה", "מיתר", "מעלה אדומים", "מעלות-תרשיחא",
+  "מצפה רמון",
+  // נ
+  "נהריה", "נחל עוז", "נס ציונה", "נתיבות", "נתיב העשרה", "נתניה",
+  "נצרת", "נצרת עילית (נוף הגליל)",
+  // ס
+  "סחנין",
+  // ע
+  "עוספיה (חוספיצה)", "עכו", "עפולה", "ערד", "ערערה", "ערערה בנגב",
+  // פ
+  "פתח תקווה", "פרדס חנה-כרכור",
+  // צ
+  "צפת",
+  // ק
+  "קדימה-צורן", "קלנסווה", "קריית אונו", "קריית אתא",
+  "קריית ביאליק", "קריית גת", "קריית ים", "קריית מוצקין",
+  "קריית מלאכי", "קריית שמונה",
+  // ר
+  "ראש העין", "ראשון לציון", "רהט", "רחובות", "רמלה",
+  "רמת גן", "רמת השרון", "רעננה",
+  // ש
+  "שדרות", "שלומי", "שדה בוקר",
+  // ת
+  "תל אביב", "תל אביב - דרום", "תל אביב - מרכז", "תל אביב - צפון",
+].sort((a, b) => a.localeCompare(b, "he"));
+
+export const REGIONS = [
+  "עוטף עזה",
+  "נגב מערבי",
+  "דרום - הנגב",
+  "נגב מזרחי והערבה",
+  "שפלה ומישור החוף הדרומי",
+  "גוש דן",
+  "מרכז - תל אביב",
+  "שרון",
+  "שומרון",
+  "ירושלים והסביבה",
+  "יהודה",
+  "חיפה והקריות",
+  "עמק יזרעאל והעמקים",
+  "גליל עליון וגולן",
+  "גליל תחתון ומערבי",
+];
+
+// Cities belonging to each region (used for bet resolution)
+// No city appears twice within the same region. A city CAN appear in multiple regions
+// (e.g. הרצליה belongs to both שרון and גוש דן) — this is intentional for bet resolution.
+export const REGION_CITIES: Record<string, string[]> = {
+  "עוטף עזה": [
+    "שדרות", "אופקים", "ניר עם", "כרמיה", "כיסופים", "נחל עוז", "כפר עזה",
+    "נתיב העשרה", "זיקים", "בארי", "רעים", "מגן", "אבשלום", "סופה",
+    "ניר עוז", "ניר יצחק", "כרם שלום", "כפר מימון", "יבול", "ארז",
+    "מבקיעים", "מפלסים", "עין השלושה", "סעד", "תקומה", "אור הנר",
+    "עלומים", "שובה", "יתד", "שוקדה", "איבים", "דקל",
+    "שדה ניצן", "יד מרדכי", "יכיני", "תלמי אליהו", "גברעם",
+  ],
+  "נגב מערבי": [
+    "נתיבות", "אופקים", "רהט", "לקיה",
+    "דורות", "אורים", "רוחמה", "שדה דוד", "גבולות",
+    "מרחבים", "שדות נגב", "פטיש",
+  ],
+  "דרום - הנגב": [
+    "באר שבע", "דימונה", "ערד", "ירוחם", "מצפה רמון",
+    "מיתר", "ערערה בנגב", "כסייפה", "חורה", "תל שבע",
+    "שגב שלום", "לקיה", "שדה בוקר", "אילת",
+  ],
+  "נגב מזרחי והערבה": [
+    "ערד", "דימונה", "ירוחם", "מצפה רמון", "אילת",
+    "יטבתה", "אילות", "קטורה", "לוטן", "סמר", "ספיר",
+    "עין יהב", "צופר", "עידן", "חצבה", "באר אורה",
+  ],
+  "שפלה ומישור החוף הדרומי": [
+    "אשדוד", "אשקלון", "קריית גת", "קריית מלאכי",
+    "גדרה", "גן יבנה", "יבנה", "מזכרת בתיה",
+    "באר יעקב", "נס ציונה", "רחובות",
+    "יד מרדכי",
+  ],
+  "גוש דן": [
+    "תל אביב", "רמת גן", "גבעתיים", "בני ברק", "חולון", "בת ים",
+    "פתח תקווה", "ראשון לציון", "הרצליה",
+    "גבעת שמואל", "קריית אונו", "יהוד-מונוסון", "אור יהודה",
+    "ראש העין", "אלעד",
+  ],
+  "מרכז - תל אביב": [
+    "תל אביב", "רמת גן", "גבעתיים", "בני ברק", "חולון", "בת ים",
+    "ראשון לציון", "רחובות", "נס ציונה", "רמלה", "לוד",
+    "פתח תקווה", "מודיעין-מכבים-רעות",
+  ],
+  "שרון": [
+    "נתניה", "הרצליה", "רעננה", "כפר סבא", "רמת השרון", "הוד השרון",
+    "כפר יונה", "קדימה-צורן", "טייבה", "טירה", "קלנסווה",
+    "חדרה", "אור עקיבא", "פרדס חנה-כרכור",
+    "זכרון יעקב",
+  ],
+  "שומרון": [
+    "אריאל", "אלפי מנשה", "קרני שומרון", "ברקן",
+    "עמנואל", "קדומים", "יצהר", "איתמר", "אלון מורה",
+    "שבי שומרון", "רבבה", "גנים",
+  ],
+  "ירושלים והסביבה": [
+    "ירושלים", "מבשרת ציון", "בית שמש", "מעלה אדומים",
+    "גבעת זאב", "מודיעין עילית", "ביתר עילית",
+  ],
+  "יהודה": [
+    "מעלה אדומים", "ביתר עילית", "אפרת", "בית אל",
+    "קריית ארבע", "אלעזר", "טקוע", "כפר עציון",
+    "נווה דניאל", "אלון שבות",
+  ],
+  "חיפה והקריות": [
+    "חיפה", "קריית ביאליק", "קריית מוצקין", "קריית ים",
+    "קריית אתא", "נשר", "טירת כרמל",
+    "עוספיה (חוספיצה)", "זכרון יעקב",
+  ],
+  "עמק יזרעאל והעמקים": [
+    "עפולה", "מגדל העמק", "יוקנעם עילית", "נצרת", "נצרת עילית (נוף הגליל)",
+    "בית שאן",
+  ],
+  "גליל עליון וגולן": [
+    "קריית שמונה", "מטולה", "צפת", "ראש פינה",
+    "חצור הגלילית", "קצרין", "שלומי",
+  ],
+  "גליל תחתון ומערבי": [
+    "נהריה", "עכו", "כרמיאל", "מעלות-תרשיחא",
+    "טבריה", "סחנין",
+  ],
+};
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type BetScope = "city" | "region" | "general";
+export type BetType = "overunder" | "total" | "quiet" | "night";
+
+export interface GeneratedBet {
+  id: string;
+  emoji: string;
+  title: string;
+  description: string;
+  multiplier: number;
+  scope: BetScope;
+  type: BetType;
+  location: string; // "כללי" for general scope
+}
+
+// ── Type group metadata (for the 4 squares UI) ───────────────────────────────
+
+export const BET_TYPE_GROUPS = [
+  { id: "overunder" as BetType, emoji: "📈", title: "אובר/אנדר", desc: "מעל/מתחת לכמות מסוימת" },
+  { id: "total"     as BetType, emoji: "📊", title: "כמה סה\"כ",  desc: "כמה אזעקות יהיו סה\"כ?" },
+  { id: "quiet"     as BetType, emoji: "🕊️", title: "תקופת שקט",  desc: "כמה זמן עד האזעקה הבאה?" },
+  { id: "night"     as BetType, emoji: "🌙", title: "אזעקת לילה", desc: "האם תהיה אזעקה הלילה?" },
+];
+
+// ── Multiplier tables ─────────────────────────────────────────────────────────
+
+// Over/Under: {threshold, under-mult-city, over-mult-city, under-mult-region, over-mult-region, under-general, over-general}
+const OU: Array<{ n: number; uc: number; oc: number; ur: number; or: number; ug: number; og: number }> = [
+  { n: 3,   uc: 3.5,   oc: 9.0,   ur: 6.0,   or: 5.0,   ug: 12.5, og: 1.8  },
+  { n: 5,   uc: 2.2,   oc: 14.0,  ur: 3.8,   or: 7.5,   ug: 8.5,  og: 2.2  },
+  { n: 10,  uc: 1.5,   oc: 28.0,  ur: 2.4,   or: 14.0,  ug: 4.0,  og: 2.8  },
+  { n: 20,  uc: 1.2,   oc: 75.0,  ur: 1.6,   or: 42.0,  ug: 2.2,  og: 5.5  },
+  { n: 50,  uc: 1.1,   oc: 200.0, ur: 1.2,   or: 110.0, ug: 1.4,  og: 18.5 },
+  { n: 100, uc: 1.05,  oc: 500.0, ur: 1.08,  or: 280.0, ug: 1.2,  og: 52.0 },
+];
+
+const QUIET_DURATIONS = [
+  { minutes: 5,   mCity: 1.4,   mRegion: 1.3,   mGeneral: 1.2   },
+  { minutes: 30,  mCity: 15.0,  mRegion: 12.0,  mGeneral: 10.0  },
+  { minutes: 60,  mCity: 48.0,  mRegion: 40.0,  mGeneral: 32.0  },
+  { minutes: 180, mCity: 250.0, mRegion: 200.0, mGeneral: 160.0 },
+];
+
+const TOTAL_RANGES = [
+  { min: 0,  max: 0,    label: "0 אזעקות",       mCity: 150.0, mRegion: 60.0, mGeneral: 25.0 },
+  { min: 1,  max: 3,    label: "1-3 אזעקות",     mCity: 5.0,   mRegion: 8.5,  mGeneral: 12.0 },
+  { min: 4,  max: 10,   label: "4-10 אזעקות",    mCity: 4.0,   mRegion: 4.5,  mGeneral: 6.0  },
+  { min: 11, max: 20,   label: "11-20 אזעקות",   mCity: 8.0,   mRegion: 5.5,  mGeneral: 4.5  },
+  { min: 21, max: 50,   label: "21-50 אזעקות",   mCity: 20.0,  mRegion: 10.0, mGeneral: 8.0  },
+  { min: 51, max: null, label: "מעל 50 אזעקות",  mCity: 85.0,  mRegion: 35.0, mGeneral: 20.0 },
+];
+
+// ── Generator ─────────────────────────────────────────────────────────────────
+
+export function generateBets(scope: BetScope, type: BetType, location: string): GeneratedBet[] {
+  const loc = location === "כללי" ? "" : location;
+  const locSuffix = loc ? ` ב${loc}` : "";
+  const encodeId = (...parts: (string | number)[]) => parts.join("|");
+
+  switch (type) {
+    case "overunder": {
+      const bets: GeneratedBet[] = [];
+      for (const row of OU) {
+        const underMult = scope === "city" ? row.uc : scope === "region" ? row.ur : row.ug;
+        const overMult  = scope === "city" ? row.oc : scope === "region" ? row.or : row.og;
+        bets.push({
+          id: encodeId(scope, "overunder", location, "under", row.n),
+          emoji: "📉",
+          title: `אנדר ${row.n}${locSuffix} היום`,
+          description: `פחות מ-${row.n} אזעקות${locSuffix} היום`,
+          multiplier: underMult,
+          scope, type, location,
+        });
+        bets.push({
+          id: encodeId(scope, "overunder", location, "over", row.n),
+          emoji: "📈",
+          title: `אובר ${row.n}${locSuffix} היום`,
+          description: `מעל ${row.n} אזעקות${locSuffix} היום`,
+          multiplier: overMult,
+          scope, type, location,
+        });
+      }
+      return bets;
+    }
+
+    case "quiet": {
+      return QUIET_DURATIONS.map(({ minutes, mCity, mRegion, mGeneral }) => {
+        const mult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
+        const durationLabel = minutes < 60
+          ? `${minutes} דקות`
+          : minutes === 60 ? "שעה" : `${minutes / 60} שעות`;
+        return {
+          id: encodeId(scope, "quiet", location, minutes),
+          emoji: "🕊️",
+          title: `שקט${locSuffix} ${durationLabel}`,
+          description: `לא תהיה אזעקה${locSuffix} במשך ${durationLabel}`,
+          multiplier: mult,
+          scope, type, location,
+        };
+      });
+    }
+
+    case "night": {
+      const mult = scope === "city" ? 4.2 : scope === "region" ? 2.8 : 1.8;
+      return [{
+        id: encodeId(scope, "night", location),
+        emoji: "🌙",
+        title: `אזעקת לילה${locSuffix}`,
+        description: `תהיה אזעקה${locSuffix} בין 00:00-06:00 הלילה`,
+        multiplier: mult,
+        scope, type, location,
+      }];
+    }
+
+    case "total": {
+      return TOTAL_RANGES.map(({ min, max, label, mCity, mRegion, mGeneral }) => {
+        const mult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
+        const desc = max === null
+          ? `מעל ${min} אזעקות${locSuffix} היום`
+          : min === max
+            ? `בדיוק ${min} אזעקות${locSuffix} היום`
+            : `בין ${min} ל-${max} אזעקות${locSuffix} היום`;
+        return {
+          id: encodeId(scope, "total", location, min, max ?? "inf"),
+          emoji: "📊",
+          title: `${label}${locSuffix} היום`,
+          description: desc,
+          multiplier: mult,
+          scope, type, location,
+        };
+      });
+    }
+  }
+}
+
+// ── Parser (used by resolution hook) ─────────────────────────────────────────
+
+export interface ParsedBetId {
+  scope: BetScope;
+  type: BetType;
+  location: string;
+  direction?: "over" | "under";
+  threshold?: number;
+  minutes?: number;
+  min?: number;
+  max?: number | null;
+}
+
+export function parseBetId(id: string): ParsedBetId | null {
+  const parts = id.split("|");
+  if (parts.length < 3) return null;
+  const [scope, type, location] = parts as [BetScope, BetType, string];
+
+  switch (type) {
+    case "overunder":
+      if (parts.length < 5) return null;
+      return { scope, type, location, direction: parts[3] as "over" | "under", threshold: Number(parts[4]) };
+    case "quiet":
+      if (parts.length < 4) return null;
+      return { scope, type, location, minutes: Number(parts[3]) };
+    case "night":
+      return { scope, type, location };
+    case "total":
+      if (parts.length < 5) return null;
+      return { scope, type, location, min: Number(parts[3]), max: parts[4] === "inf" ? null : Number(parts[4]) };
+    default:
+      return null;
+  }
+}
+
+// Helper used by resolution: does an alert match a location?
+export function alertMatchesLocation(areas: string[], scope: BetScope, location: string): boolean {
+  if (scope === "general" || location === "כללי") return true;
+  if (scope === "city") return areas.some(c => c.includes(location));
+  if (scope === "region") {
+    const cities = REGION_CITIES[location] ?? [];
+    return areas.some(c => cities.some(city => c.includes(city)));
+  }
+  return false;
+}

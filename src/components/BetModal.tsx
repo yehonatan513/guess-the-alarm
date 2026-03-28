@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { ref, push } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
-import { BetTemplate } from "@/lib/bets-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -13,11 +12,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+// Accept any bet shape that has these 5 fields (works for both BetTemplate and GeneratedBet)
+interface BetBase {
+  id: string;
+  emoji: string;
+  title: string;
+  description: string;
+  multiplier: number;
+}
+
 interface Props {
-  bet: BetTemplate | null;
+  bet: BetBase | null;
   open: boolean;
   onClose: () => void;
 }
+
 
 const QUICK = [1_000_000, 10_000_000, 50_000_000, 100_000_000];
 

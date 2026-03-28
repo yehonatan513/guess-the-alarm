@@ -1,109 +1,171 @@
-import React, { useState } from "react";
-import { BETS, BetTemplate } from "@/lib/bets-data";
+import React, { useState, useMemo } from "react";
+import {
+  CITIES, REGIONS, BET_TYPE_GROUPS, generateBets,
+  BetScope, BetType, GeneratedBet
+} from "@/lib/bet-generator";
 import BetModal from "@/components/BetModal";
 
-const SCOPES = ["עיר", "אזור", "כללי"] as const;
-
-// Map bet categories to display groups shown on BuildBet
-const BUILD_GROUPS = [
-  {
-    emoji: "📊",
-    title: "כמה סה\"כ",
-    desc: "כמה אזעקות סה\"כ היום?",
-    filter: (b: BetTemplate) =>
-      b.id === "b2" || b.id === "b25" || b.id === "b26" || b.id === "b24" || b.id === "b23",
-  },
-  {
-    emoji: "📈",
-    title: "אובר/אנדר",
-    desc: "מעל/מתחת לסף מסוים באזור",
-    filter: (b: BetTemplate) =>
-      (b.category === "common" && (b.id === "b3" || b.id === "b5" || b.id === "b15")) ||
-      b.id === "b20" || b.id === "b21" || b.id === "b22" || b.id === "b18" || b.id === "b13",
-  },
-  {
-    emoji: "🕊️",
-    title: "תקופת שקט",
-    desc: "כמה זמן עד האזעקה הבאה?",
-    filter: (b: BetTemplate) => b.id === "b4" || b.id === "b16" || b.id === "b11",
-  },
-  {
-    emoji: "🌙",
-    title: "אזעקת לילה",
-    desc: "האם תהיה אזעקה הלילה? (00:00-06:00)",
-    filter: (b: BetTemplate) =>
-      b.id === "b1" || b.id === "b6" || b.id === "b9" || b.id === "b12" || b.id === "b17",
-  },
+const SCOPE_TABS: { id: BetScope; label: string; icon: string }[] = [
+  { id: "city",    label: "עיר",   icon: "🏙️" },
+  { id: "region",  label: "אזור",  icon: "🗺️" },
+  { id: "general", label: "כללי",  icon: "🌍" },
 ];
 
 const BuildBet = () => {
-  const [scope, setScope] = useState<typeof SCOPES[number]>("כללי");
-  const [selectedBet, setSelectedBet] = useState<BetTemplate | null>(null);
-  const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
+  const [scope, setScope]           = useState<BetScope>("general");
+  const [location, setLocation]     = useState<string>("כללי");
+  const [citySearch, setCitySearch] = useState("");
+  const [selectedType, setSelectedType] = useState<BetType | null>(null);
+  const [selectedBet, setSelectedBet]   = useState<GeneratedBet | null>(null);
 
-  const groupBets = selectedGroup !== null
-    ? BETS.filter(BUILD_GROUPS[selectedGroup].filter)
-    : [];
+  const filteredCities = useMemo(
+    () => CITIES.filter(c => c.includes(citySearch)),
+    [citySearch]
+  );
+
+  const locationReady = scope === "general" || (!!location && location !== "כללי");
+
+  const bets = useMemo(
+    () => (selectedType && locationReady)
+      ? generateBets(scope, selectedType, location || "כללי")
+      : [],
+    [scope, selectedType, location, locationReady]
+  );
+
+  const handleScopeChange = (s: BetScope) => {
+    setScope(s);
+    setLocation(s === "general" ? "כללי" : "");
+    setSelectedType(null);
+    setCitySearch("");
+  };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-24">
+      {/* Header */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-4 py-4">
         <h1 className="text-primary font-black text-lg text-center">🎰 בנה הימור</h1>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 space-y-6 mt-4">
-        {/* Scope */}
-        <div className="space-y-2">
-          <h2 className="text-foreground font-bold text-sm">טווח ההימור</h2>
-          <div className="flex bg-card rounded-lg p-1 border border-border">
-            {SCOPES.map((s) => (
+      <div className="max-w-lg mx-auto px-4 space-y-5 mt-4">
+
+        {/* ── Step 1: Scope tabs ── */}
+        <div className="space-y-1.5">
+          <p className="text-muted-foreground text-xs font-semibold">שלב 1 — טווח ההימור</p>
+          <div className="flex bg-card rounded-xl p-1 border border-border gap-1">
+            {SCOPE_TABS.map((t) => (
               <button
-                key={s}
-                onClick={() => setScope(s)}
-                className={`flex-1 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
-                  scope === s ? "bg-primary text-primary-foreground scale-105" : "text-muted-foreground"
+                key={t.id}
+                onClick={() => handleScopeChange(t.id)}
+                className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex flex-col items-center gap-0.5 ${
+                  scope === t.id
+                    ? "bg-primary text-primary-foreground shadow-md"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {s}
+                <span className="text-base">{t.icon}</span>
+                {t.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Bet type groups */}
-        <div className="space-y-2">
-          <h2 className="text-foreground font-bold text-sm">סוג הימור</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {BUILD_GROUPS.map((group, idx) => (
-              <button
-                key={group.title}
-                onClick={() => setSelectedGroup(selectedGroup === idx ? null : idx)}
-                className={`border rounded-xl p-4 text-right transition-all duration-200 active:scale-95 space-y-2 ${
-                  selectedGroup === idx
-                    ? "bg-primary/10 border-primary shadow-lg shadow-primary/10"
-                    : "bg-card border-border hover:border-primary/50"
-                }`}
-              >
-                <span className="text-2xl">{group.emoji}</span>
-                <p className="text-foreground text-sm font-bold">{group.title}</p>
-                <p className="text-muted-foreground text-xs">{group.desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Expanded bet list for the selected group */}
-        {selectedGroup !== null && groupBets.length > 0 && (
+        {/* ── Step 2: Location picker (city or region) ── */}
+        {scope === "city" && (
           <div className="space-y-2 animate-fadeIn">
-            <h2 className="text-foreground font-bold text-sm">בחר הימור ספציפי</h2>
-            <div className="grid grid-cols-1 gap-2">
-              {groupBets.map((bet) => (
+            <p className="text-muted-foreground text-xs font-semibold">שלב 2 — בחר עיר</p>
+            <input
+              type="text"
+              placeholder="🔍 חפש עיר..."
+              value={citySearch}
+              onChange={(e) => setCitySearch(e.target.value)}
+              className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 transition-colors"
+              dir="rtl"
+            />
+            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+              {filteredCities.map((city) => (
+                <button
+                  key={city}
+                  onClick={() => { setLocation(city); setSelectedType(null); setCitySearch(""); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 ${
+                    location === city
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-card border border-border text-foreground hover:border-primary/50"
+                  }`}
+                >
+                  {city}
+                </button>
+              ))}
+            </div>
+            {location && location !== "כללי" && (
+              <p className="text-primary text-xs font-bold text-center">
+                📍 נבחר: {location}
+              </p>
+            )}
+          </div>
+        )}
+
+        {scope === "region" && (
+          <div className="space-y-2 animate-fadeIn">
+            <p className="text-muted-foreground text-xs font-semibold">שלב 2 — בחר אזור</p>
+            <div className="grid grid-cols-2 gap-2">
+              {REGIONS.map((region) => (
+                <button
+                  key={region}
+                  onClick={() => { setLocation(region); setSelectedType(null); }}
+                  className={`py-3 px-3 rounded-xl text-xs font-bold transition-all duration-200 text-right ${
+                    location === region
+                      ? "bg-primary text-primary-foreground shadow-md"
+                      : "bg-card border border-border text-foreground hover:border-primary/50"
+                  }`}
+                >
+                  {region}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3: Bet type squares ── */}
+        {locationReady && (
+          <div className="space-y-2 animate-fadeIn">
+            <p className="text-muted-foreground text-xs font-semibold">
+              {scope === "general" ? "שלב 2" : "שלב 3"} — סוג הימור
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {BET_TYPE_GROUPS.map((group) => (
+                <button
+                  key={group.id}
+                  onClick={() => setSelectedType(selectedType === group.id ? null : group.id)}
+                  className={`border rounded-xl p-4 text-right transition-all duration-200 active:scale-95 space-y-1.5 ${
+                    selectedType === group.id
+                      ? "bg-primary/10 border-primary shadow-lg shadow-primary/10"
+                      : "bg-card border-border hover:border-primary/50"
+                  }`}
+                >
+                  <span className="text-2xl block">{group.emoji}</span>
+                  <p className="text-foreground text-sm font-bold">{group.title}</p>
+                  <p className="text-muted-foreground text-xs leading-tight">{group.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 4: Specific bet list ── */}
+        {selectedType && locationReady && bets.length > 0 && (
+          <div className="space-y-2 animate-slideInUp">
+            <p className="text-muted-foreground text-xs font-semibold">
+              {scope === "general" ? "שלב 3" : "שלב 4"} — בחר הימור
+            </p>
+            <div className="space-y-2">
+              {bets.map((bet, i) => (
                 <button
                   key={bet.id}
                   onClick={() => setSelectedBet(bet)}
-                  className="bg-card border border-border rounded-xl p-4 text-right hover:border-primary/60 hover:bg-primary/5 transition-all duration-200 active:scale-98 flex items-center justify-between"
+                  className="w-full bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between hover:border-primary/60 hover:bg-primary/5 transition-all duration-150 active:scale-98 animate-fadeIn"
+                  style={{ animationDelay: `${i * 35}ms` }}
                 >
-                  <span className="inline-block bg-primary/15 text-primary font-black text-sm px-2 py-0.5 rounded-md">
+                  <span className="bg-primary/15 text-primary font-black text-sm px-2 py-0.5 rounded-md">
                     x{bet.multiplier}
                   </span>
                   <div className="text-right">
@@ -118,14 +180,21 @@ const BuildBet = () => {
           </div>
         )}
 
-        {selectedGroup === null && (
+        {/* Placeholder when no location selected yet */}
+        {!locationReady && (
           <div className="bg-card border border-border rounded-xl p-6 text-center">
-            <p className="text-muted-foreground text-sm">בחר סוג הימור כדי להתחיל 🎲</p>
+            <p className="text-muted-foreground text-sm">
+              {scope === "city" ? "🏙️ בחר עיר כדי להמשיך" : "🗺️ בחר אזור כדי להמשיך"}
+            </p>
           </div>
         )}
       </div>
 
-      <BetModal bet={selectedBet} open={!!selectedBet} onClose={() => setSelectedBet(null)} />
+      <BetModal
+        bet={selectedBet}
+        open={!!selectedBet}
+        onClose={() => setSelectedBet(null)}
+      />
     </div>
   );
 };

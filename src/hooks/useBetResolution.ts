@@ -3,6 +3,7 @@ import { ref, get, update } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { parseBetId, alertMatchesLocation } from "@/lib/bet-generator";
 
 interface Alert {
   id: string;
@@ -164,7 +165,63 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
               break;
             }
             default: {
-              if (hour >= 23) {
+              // ── Dynamic bets from BuildBet (IDs contain "|") ──────────────
+              if (bet.type.includes("|")) {
+                const parsed = parseBetId(bet.type);
+                if (parsed) {
+                  const matchAlert = (areas: string[]) =>
+                    alertMatchesLocation(areas, parsed.scope, parsed.location);
+
+                  const countInLocation = () =>
+                    alerts.filter(a => matchAlert(a.areas)).length;
+
+                  switch (parsed.type) {
+                    case "overunder": {
+                      const count = countInLocation();
+                      if (parsed.direction === "over") {
+                        if (count > parsed.threshold!) result = "win";
+                        else if (hour >= 23) result = "loss";
+                      } else {
+                        if (count >= parsed.threshold!) result = "loss";
+                        else if (hour >= 23) result = "win";
+                      }
+                      break;
+                    }
+                    case "quiet": {
+                      const betCreated = new Date(bet.created_at).getTime();
+                      const endTime = betCreated + (parsed.minutes! * 60 * 1000);
+                      if (now.getTime() > endTime) {
+                        const hasAlert = alerts.some(a => {
+                          const t = new Date(a.time).getTime();
+                          return t > betCreated && t < endTime && matchAlert(a.areas);
+                        });
+                        result = hasAlert ? "loss" : "win";
+                      }
+                      break;
+                    }
+                    case "night": {
+                      if (hour >= 0 && hour < 6) {
+                        const hasNight = activeAlerts.some(a => matchAlert(a.areas));
+                        if (hasNight) result = "win";
+                      } else if (hour >= 6) {
+                        const betDate = new Date(bet.created_at);
+                        if (betDate.toDateString() === now.toDateString()) result = "loss";
+                      }
+                      break;
+                    }
+                    case "total": {
+                      if (hour >= 23) {
+                        const count = countInLocation();
+                        const { min, max } = parsed;
+                        const inRange = count >= min! && (max === null || count <= max!);
+                        result = inRange ? "win" : "loss";
+                      }
+                      break;
+                    }
+                  }
+                }
+              } else if (hour >= 23) {
+                // Unknown static bet — expire at end of day
                 const betCreated = new Date(bet.created_at);
                 if (betCreated.toDateString() !== now.toDateString()) {
                   result = "loss";
