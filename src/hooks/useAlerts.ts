@@ -7,6 +7,12 @@ interface Alert {
   type: string;
 }
 
+const PROXY = "https://corsproxy.io/?url=";
+const HEADERS = {
+  Referer: "https://www.oref.org.il/",
+  "X-Requested-With": "XMLHttpRequest",
+};
+
 export function useAlerts() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [todayCount, setTodayCount] = useState(0);
@@ -16,8 +22,8 @@ export function useAlerts() {
       // Fetch current active alerts
       try {
         const res = await fetch(
-          "https://corsproxy.io/?url=https://www.oref.org.il/WarningMessages/alert/alerts.json",
-          { headers: { "X-Requested-With": "XMLHttpRequest" } }
+          PROXY + encodeURIComponent("https://www.oref.org.il/WarningMessages/alert/alerts.json"),
+          { headers: HEADERS }
         );
         const text = await res.text();
         if (text && text.trim() !== "") {
@@ -41,31 +47,48 @@ export function useAlerts() {
         }
       } catch {}
 
-      // Fetch history for today's count and recent alerts list
+      // Fetch history for today's count - try oref first, fallback to tzevaadom
       try {
-        const res = await fetch(
-          "https://corsproxy.io/?url=https://www.oref.org.il/WarningMessages/alert/alertsHistory.json",
-          { headers: { "X-Requested-With": "XMLHttpRequest" } }
-        );
-        const text = await res.text();
-        if (text && text.trim() !== "") {
+        let data: any[] | null = null;
+
+        try {
+          const res = await fetch(
+            PROXY + encodeURIComponent("https://www.oref.org.il/WarningMessages/History/AlertsHistory.json"),
+            { headers: HEADERS }
+          );
+          const text = await res.text();
+          if (text && text.trim() !== "") {
+            const parsed = JSON.parse(text);
+            if (Array.isArray(parsed) && parsed.length > 0) data = parsed;
+          }
+        } catch {}
+
+        // Fallback to tzevaadom
+        if (!data) {
           try {
-            const data = JSON.parse(text);
-            if (Array.isArray(data) && data.length > 0) {
-              setTodayCount(data.length);
-              const historyAlerts: Alert[] = data
-                .slice(0, 30)
-                .map((a: any, i: number) => ({
-                  id: `hist-${a.alertDate || i}-${i}`,
-                  areas: a.data ? a.data.split(", ") : [a.title || "אזור לא ידוע"],
-                  time: a.alertDate
-                    ? new Date(a.alertDate).toISOString()
-                    : new Date().toISOString(),
-                  type: a.cat || "missiles",
-                }));
-              setAlerts(historyAlerts);
-            }
+            const res = await fetch("https://alerts.tzevaadom.co.il/history");
+            const parsed = await res.json();
+            if (Array.isArray(parsed) && parsed.length > 0) data = parsed;
           } catch {}
+        }
+
+        if (data && data.length > 0) {
+          setTodayCount(data.length);
+          const historyAlerts: Alert[] = data.slice(0, 30).map((a: any, i: number) => ({
+            id: `hist-${a.alertDate || a.date || i}-${i}`,
+            areas: a.data
+              ? a.data.split(", ")
+              : a.cities
+              ? (Array.isArray(a.cities) ? a.cities : [a.cities])
+              : [a.title || "אזור לא ידוע"],
+            time: a.alertDate
+              ? new Date(a.alertDate).toISOString()
+              : a.date
+              ? new Date(a.date).toISOString()
+              : new Date().toISOString(),
+            type: a.cat || a.category || "missiles",
+          }));
+          setAlerts(historyAlerts);
         }
       } catch {}
     };
