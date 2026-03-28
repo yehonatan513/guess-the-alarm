@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface Alert {
   id: string;
@@ -7,59 +7,78 @@ interface Alert {
   type: string;
 }
 
+interface AlertsState {
+  alerts: Alert[];
+  activeAlerts: Alert[];
+  todayCount: number;
+  error: string | null;
+  lastUpdated: Date | null;
+}
+
 const PROXY_URL = "https://cvokdzmibrxadrpiczow.supabase.co/functions/v1/fetch-alerts";
 
 export function useAlerts() {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [activeAlerts, setActiveAlerts] = useState<Alert[]>([]);
-  const [todayCount, setTodayCount] = useState(0);
+  const [state, setState] = useState<AlertsState>({
+    alerts: [],
+    activeAlerts: [],
+    todayCount: 0,
+    error: null,
+    lastUpdated: null,
+  });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch(PROXY_URL);
-        const data = await res.json();
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch(PROXY_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
 
-        // Active alerts
-        if (data.active && Array.isArray(data.active) && data.active.length > 0) {
-          const active: Alert[] = data.active.map((a: any, i: number) => ({
+      const activeAlerts: Alert[] = [];
+      if (data.active && Array.isArray(data.active) && data.active.length > 0) {
+        data.active.forEach((a: any, i: number) => {
+          activeAlerts.push({
             id: `active-${Date.now()}-${i}`,
             areas: a.data ? (Array.isArray(a.data) ? a.data : a.data.split(", ")) : [a.title || "אזור לא ידוע"],
             time: new Date().toISOString(),
             type: a.cat || "missiles",
-          }));
-          setActiveAlerts(active);
-        } else {
-          setActiveAlerts([]);
-        }
-
-        // History - flatten nested alerts from history groups
-        if (data.history && Array.isArray(data.history)) {
-          const allAlerts: Alert[] = [];
-          let totalCount = 0;
-          data.history.forEach((group: any) => {
-            if (group.alerts && Array.isArray(group.alerts)) {
-              totalCount += group.alerts.length;
-              group.alerts.forEach((a: any, i: number) => {
-                allAlerts.push({
-                  id: `hist-${group.id || 0}-${i}`,
-                  areas: Array.isArray(a.cities) ? a.cities : [a.cities || "אזור לא ידוע"],
-                  time: a.time ? new Date(a.time * 1000).toISOString() : new Date().toISOString(),
-                  type: a.threat === 0 ? "missiles" : String(a.threat),
-                });
-              });
-            }
           });
-          setTodayCount(totalCount);
-          setAlerts(allAlerts.slice(0, 30));
-        }
-      } catch {}
-    };
+        });
+      }
 
+      const allAlerts: Alert[] = [];
+      let totalCount = 0;
+      if (data.history && Array.isArray(data.history)) {
+        data.history.forEach((group: any) => {
+          if (group.alerts && Array.isArray(group.alerts)) {
+            totalCount += group.alerts.length;
+            group.alerts.forEach((a: any, i: number) => {
+              allAlerts.push({
+                id: `hist-${group.id || 0}-${i}`,
+                areas: Array.isArray(a.cities) ? a.cities : [a.cities || "אזור לא ידוע"],
+                time: a.time ? new Date(a.time * 1000).toISOString() : new Date().toISOString(),
+                type: a.threat === 0 ? "missiles" : String(a.threat),
+              });
+            });
+          }
+        });
+      }
+
+      setState({
+        alerts: allAlerts.slice(0, 30),
+        activeAlerts,
+        todayCount: totalCount,
+        error: null,
+        lastUpdated: new Date(),
+      });
+    } catch (err: any) {
+      setState(prev => ({ ...prev, error: "לא ניתן לטעון אזעקות", lastUpdated: new Date() }));
+    }
+  }, []);
+
+  useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchData]);
 
-  return { alerts, activeAlerts, todayCount };
+  return state;
 }

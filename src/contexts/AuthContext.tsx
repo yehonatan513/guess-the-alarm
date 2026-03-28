@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { User, onAuthStateChanged, signOut } from "firebase/auth";
-import { ref, get, set } from "firebase/database";
+import { ref, get, set, update } from "firebase/database";
 import { auth, db } from "@/lib/firebase";
 
 interface UserProfile {
@@ -33,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [needsUsername, setNeedsUsername] = useState(false);
 
-  const fetchProfile = async (uid: string) => {
+  const fetchProfile = useCallback(async (uid: string) => {
     const snap = await get(ref(db, `users/${uid}`));
     if (snap.exists()) {
       setProfile(snap.val());
@@ -42,22 +42,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setNeedsUsername(true);
       setProfile(null);
     }
-  };
+  }, []);
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (user) await fetchProfile(user.uid);
-  };
+  }, [user, fetchProfile]);
 
-  const updateCoins = async (newCoins: number) => {
+  const updateCoins = useCallback(async (newCoins: number) => {
     if (!user || !profile) return;
+
+    // Update user coins
     await set(ref(db, `users/${user.uid}/coins`), newCoins);
-    setProfile({ ...profile, coins: newCoins });
+    setProfile((prev) => prev ? { ...prev, coins: newCoins } : prev);
+
+    // Update global leaderboard
     await set(ref(db, `leaderboard/${user.uid}`), {
       username: profile.username,
       coins: newCoins,
       avatar_emoji: profile.avatar_emoji,
     });
-  };
+
+    // Sync coins in all groups the user is a member of
+    try {
+      const groupsSnap = await get(ref(db, "groups"));
+      if (groupsSnap.exists()) {
+        const groups = groupsSnap.val() as Record<string, any>;
+        const groupUpdates: Record<string, number> = {};
+        for (const [groupId, group] of Object.entries(groups)) {
+          if (group.members && group.members[user.uid]) {
+            groupUpdates[`groups/${groupId}/members/${user.uid}/coins`] = newCoins;
+          }
+        }
+        if (Object.keys(groupUpdates).length > 0) {
+          await update(ref(db), groupUpdates);
+        }
+      }
+    } catch (e) {
+      // Group sync is best-effort; don't fail the main coin update
+      console.warn("Group coin sync failed:", e);
+    }
+  }, [user, profile]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -71,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     });
     return unsub;
-  }, []);
+  }, [fetchProfile]);
 
   const logout = async () => {
     await signOut(auth);

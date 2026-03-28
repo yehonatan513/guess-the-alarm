@@ -2,8 +2,20 @@ import { useEffect, useRef } from "react";
 import { ref, get, update } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAlerts } from "@/hooks/useAlerts";
 import { toast } from "sonner";
+
+interface Alert {
+  id: string;
+  areas: string[];
+  time: string;
+  type: string;
+}
+
+interface BetResolutionInput {
+  alerts: Alert[];
+  activeAlerts: Alert[];
+  todayCount: number;
+}
 
 interface FirebaseBet {
   uid: string;
@@ -18,17 +30,39 @@ interface FirebaseBet {
   coins_won: number;
 }
 
-export function useBetResolution() {
+// Accept alert data as params instead of calling useAlerts() again (prevents double polling)
+export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolutionInput) {
   const { user, profile, updateCoins } = useAuth();
-  const { alerts, activeAlerts, todayCount } = useAlerts();
   const processingRef = useRef(false);
 
+  // Store latest values in refs so the interval callback always has fresh data
+  // without needing to be recreated on every alert update
+  const alertsRef = useRef(alerts);
+  const activeAlertsRef = useRef(activeAlerts);
+  const todayCountRef = useRef(todayCount);
+
+  // Keep refs in sync on every render
+  alertsRef.current = alerts;
+  activeAlertsRef.current = activeAlerts;
+  todayCountRef.current = todayCount;
+
+  // Store profile in ref too so updateCoins always uses the latest value
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
+
   useEffect(() => {
-    if (!user || !profile) return;
+    if (!user) return;
 
     const resolve = async () => {
       if (processingRef.current) return;
+      const currentProfile = profileRef.current;
+      if (!currentProfile) return;
+
       processingRef.current = true;
+
+      const alerts = alertsRef.current;
+      const activeAlerts = activeAlertsRef.current;
+      const todayCount = todayCountRef.current;
 
       try {
         const snap = await get(ref(db, "bets"));
@@ -48,36 +82,34 @@ export function useBetResolution() {
           let result: "win" | "loss" | null = null;
 
           switch (bet.type) {
-            // "מעל 20 אזעקות היום"
             case "b2": {
               if (todayCount > 20) result = "win";
               else if (hour >= 23) result = "loss";
               break;
             }
-            // "אזעקת לילה בשומרה"
             case "b1": {
               if (hour >= 0 && hour < 6) {
                 const allCities = activeAlerts.flatMap(a => a.areas);
                 if (allCities.some(c => c.includes("שומר"))) result = "win";
               } else if (hour >= 6) {
-                // Night window passed without match
                 const betDate = new Date(bet.created_at);
-                const betDay = betDate.toDateString();
-                const today = now.toDateString();
-                if (betDay !== today || hour >= 6) result = "loss";
+                if (betDate.toDateString() === now.toDateString()) result = "loss";
               }
               break;
             }
-            // "אובר 10 במרכז היום"
             case "b3": {
               const centralCities = alerts.filter(a =>
-                a.areas.some(c => c.includes("תל אביב") || c.includes("רמת גן") || c.includes("גבעתיים") || c.includes("בני ברק") || c.includes("חולון") || c.includes("בת ים") || c.includes("הרצליה") || c.includes("רעננה") || c.includes("כפר סבא") || c.includes("פתח תקווה") || c.includes("ראשון") || c.includes("רחובות"))
+                a.areas.some(c =>
+                  c.includes("תל אביב") || c.includes("רמת גן") || c.includes("גבעתיים") ||
+                  c.includes("בני ברק") || c.includes("חולון") || c.includes("בת ים") ||
+                  c.includes("הרצליה") || c.includes("רעננה") || c.includes("כפר סבא") ||
+                  c.includes("פתח תקווה") || c.includes("ראשון") || c.includes("רחובות")
+                )
               );
               if (centralCities.length > 10) result = "win";
               else if (hour >= 23) result = "loss";
               break;
             }
-            // "שקט מעל שעה"
             case "b4": {
               const betCreated = new Date(bet.created_at).getTime();
               const oneHourAfter = betCreated + 60 * 60 * 1000;
@@ -90,7 +122,6 @@ export function useBetResolution() {
               }
               break;
             }
-            // "אזעקה תוך 5 דקות"
             case "b10": {
               const betCreated = new Date(bet.created_at).getTime();
               const fiveMin = betCreated + 5 * 60 * 1000;
@@ -103,7 +134,6 @@ export function useBetResolution() {
               }
               break;
             }
-            // "שקט +30 דקות"
             case "b16": {
               const betCreated = new Date(bet.created_at).getTime();
               const thirtyMin = betCreated + 30 * 60 * 1000;
@@ -116,19 +146,16 @@ export function useBetResolution() {
               }
               break;
             }
-            // "אובר 50 היום"
             case "b25": {
               if (todayCount > 50) result = "win";
               else if (hour >= 23) result = "loss";
               break;
             }
-            // "אובר 100 היום"
             case "b26": {
               if (todayCount > 100) result = "win";
               else if (hour >= 23) result = "loss";
               break;
             }
-            // "אזעקה בת"א"
             case "b14": {
               const allCities = [...alerts, ...activeAlerts].flatMap(a => a.areas);
               const betCreated = new Date(bet.created_at);
@@ -136,8 +163,7 @@ export function useBetResolution() {
               else if (hour >= 23 && betCreated.toDateString() === now.toDateString()) result = "loss";
               break;
             }
-            default:
-              // For unhandled bet types, check end of day
+            default: {
               if (hour >= 23) {
                 const betCreated = new Date(bet.created_at);
                 if (betCreated.toDateString() !== now.toDateString()) {
@@ -145,6 +171,7 @@ export function useBetResolution() {
                 }
               }
               break;
+            }
           }
 
           if (result) {
@@ -161,19 +188,17 @@ export function useBetResolution() {
           }
         }
 
-        // Apply all updates
         if (Object.keys(updates).length > 0) {
           await update(ref(db), updates);
 
           if (coinsToAdd > 0) {
-            await updateCoins(profile.coins + coinsToAdd);
+            await updateCoins(currentProfile.coins + coinsToAdd);
           }
 
-          // Update win/loss stats
           if (wins > 0 || losses > 0) {
             await update(ref(db, `users/${user.uid}`), {
-              wins: (profile.wins || 0) + wins,
-              losses: (profile.losses || 0) + losses,
+              wins: (currentProfile.wins || 0) + wins,
+              losses: (currentProfile.losses || 0) + losses,
             });
           }
 
@@ -198,5 +223,5 @@ export function useBetResolution() {
     resolve();
     const interval = setInterval(resolve, 30000);
     return () => clearInterval(interval);
-  }, [user, profile, alerts, activeAlerts, todayCount]);
+  }, [user?.uid]); // Only re-subscribe when user changes, not on every alert update
 }

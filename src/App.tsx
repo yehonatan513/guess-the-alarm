@@ -1,3 +1,4 @@
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,6 +12,37 @@ import BuildBet from "./pages/BuildBet";
 import MyBets from "./pages/MyBets";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+
+// ── Theme Context ──────────────────────────────────────────
+type Theme = "dark" | "light";
+interface ThemeContextType { theme: Theme; toggleTheme: () => void; }
+const ThemeContext = createContext<ThemeContextType>({ theme: "dark", toggleTheme: () => {} });
+export const useTheme = () => useContext(ThemeContext);
+
+const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+  const [theme, setTheme] = useState<Theme>(() => {
+    return (localStorage.getItem("theme") as Theme) ?? "dark";
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+// ──────────────────────────────────────────────────────────
 
 const AppContent = () => {
   const { user, loading, needsUsername } = useAuth();
@@ -41,15 +73,17 @@ const AppContent = () => {
 };
 
 const App = () => (
-  <TooltipProvider>
-    <Toaster />
-    <Sonner />
-    <BrowserRouter>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </BrowserRouter>
-  </TooltipProvider>
+  <ThemeProvider>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </BrowserRouter>
+    </TooltipProvider>
+  </ThemeProvider>
 );
 
 export default App;

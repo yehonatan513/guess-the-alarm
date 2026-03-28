@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/App";
 import { useAlerts } from "@/hooks/useAlerts";
 import { useBetResolution } from "@/hooks/useBetResolution";
 import { BETS, BetTemplate } from "@/lib/bets-data";
@@ -16,11 +17,14 @@ const formatCoins = (n: number) => {
 
 const Index = () => {
   const { profile, logout } = useAuth();
-  const { alerts, activeAlerts, todayCount } = useAlerts();
+  const { theme, toggleTheme } = useTheme();
+  const { alerts, activeAlerts, todayCount, error } = useAlerts();
   const [tab, setTab] = useState<"common" | "dynamic">("common");
-  useBetResolution();
-  const [selectedBet, setSelectedBet] = useState<BetTemplate | null>(null);
 
+  // Pass alert data so useBetResolution doesn't need its own useAlerts() instance
+  useBetResolution({ alerts, activeAlerts, todayCount });
+
+  const [selectedBet, setSelectedBet] = useState<BetTemplate | null>(null);
   const filtered = BETS.filter((b) => b.category === tab);
 
   return (
@@ -33,6 +37,13 @@ const Index = () => {
             <span className="text-primary font-black text-xl">{profile ? formatCoins(profile.coins) : "0"}</span>
           </div>
           <h1 className="text-primary font-black text-sm tracking-widest">GUESS THE ALARM</h1>
+          <button
+            onClick={toggleTheme}
+            className="text-xl w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all duration-200 active:scale-90"
+            title={theme === "dark" ? "עבור למצב בהיר" : "עבור למצב כהה"}
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
         </div>
         <div className="flex justify-between items-center max-w-lg mx-auto mt-1">
           <span className="text-muted-foreground text-xs">{profile?.avatar_emoji} {profile?.username}</span>
@@ -43,7 +54,7 @@ const Index = () => {
       <div className="max-w-lg mx-auto px-4 space-y-4 mt-4">
         {/* Active alert banner */}
         {activeAlerts.length > 0 && (
-          <div className="bg-destructive border border-destructive rounded-lg p-3 text-center animate-pulse">
+          <div className="bg-destructive border border-destructive rounded-lg p-3 text-center animate-pulseAlert">
             <p className="text-destructive-foreground text-sm font-black">🚨 אזעקה פעילה!</p>
             <p className="text-destructive-foreground text-xs mt-1">
               {activeAlerts.flatMap((a) => a.areas).join(", ")}
@@ -51,13 +62,20 @@ const Index = () => {
           </div>
         )}
 
+        {/* API error notice */}
+        {error && (
+          <div className="bg-muted border border-border rounded-lg p-2 text-center animate-fadeIn">
+            <p className="text-muted-foreground text-xs">⚠️ {error} — מנסה שוב...</p>
+          </div>
+        )}
+
         {/* Warning */}
-        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-2 text-center">
+        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-2 text-center animate-fadeIn">
           <p className="text-destructive text-xs font-bold">⚠️ לא כסף אמיתי - לבידור בלבד</p>
         </div>
 
         {/* Recent alerts */}
-        <div className="space-y-2">
+        <div className="space-y-2 animate-slideInUp" style={{ animationDelay: "60ms" }}>
           <div className="flex justify-between items-center">
             <h2 className="text-foreground font-bold text-sm">🚨 אזעקות אחרונות</h2>
             <Badge variant="destructive" className="text-xs">{todayCount} היום</Badge>
@@ -79,12 +97,12 @@ const Index = () => {
         </div>
 
         {/* Market toggle */}
-        <div className="space-y-3">
+        <div className="space-y-3 animate-slideInUp" style={{ animationDelay: "120ms" }}>
           <h2 className="text-foreground font-bold text-sm">📊 שוק ההימורים</h2>
           <div className="flex bg-card rounded-lg p-1 border border-border">
             <button
               onClick={() => setTab("common")}
-              className={`flex-1 py-2 rounded-md text-xs font-bold transition-colors ${
+              className={`flex-1 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
                 tab === "common" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
               }`}
             >
@@ -92,7 +110,7 @@ const Index = () => {
             </button>
             <button
               onClick={() => setTab("dynamic")}
-              className={`flex-1 py-2 rounded-md text-xs font-bold transition-colors ${
+              className={`flex-1 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
                 tab === "dynamic" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
               }`}
             >
@@ -100,13 +118,13 @@ const Index = () => {
             </button>
           </div>
 
-          {/* Bet cards grid */}
           <div className="grid grid-cols-2 gap-3">
-            {filtered.map((bet) => (
+            {filtered.map((bet, i) => (
               <button
                 key={bet.id}
                 onClick={() => setSelectedBet(bet)}
-                className="bg-card border border-border rounded-xl p-3 text-right hover:border-primary/50 transition-all active:scale-95 space-y-1"
+                className="bg-card border border-border rounded-xl p-3 text-right hover:border-primary/50 hover:shadow-md hover:shadow-primary/10 transition-all duration-200 active:scale-95 space-y-1 animate-fadeIn"
+                style={{ animationDelay: `${i * 40}ms` }}
               >
                 <span className="text-xl">{bet.emoji}</span>
                 <p className="text-foreground text-xs font-bold leading-tight">{bet.title}</p>

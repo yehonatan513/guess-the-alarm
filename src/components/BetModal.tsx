@@ -104,7 +104,7 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
             disabled={!canBet}
             className="w-full font-bold text-lg h-12"
           >
-            !הימר 🎯
+            המר! 🎯
           </Button>
         </div>
       </DialogContent>

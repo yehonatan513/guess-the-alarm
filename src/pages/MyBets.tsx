@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ref, query, orderByChild, equalTo, get } from "firebase/database";
+import { ref, query, orderByChild, equalTo, onValue } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
@@ -23,16 +23,21 @@ const MyBets = () => {
 
   useEffect(() => {
     if (!user) return;
-    const fetchBets = async () => {
-      const snap = await get(query(ref(db, "bets"), orderByChild("uid"), equalTo(user.uid)));
+
+    // Real-time listener instead of one-time get()
+    const betsRef = query(ref(db, "bets"), orderByChild("uid"), equalTo(user.uid));
+    const unsub = onValue(betsRef, (snap) => {
       if (snap.exists()) {
         const data = snap.val();
         const arr = Object.entries(data).map(([id, v]: any) => ({ id, ...v }));
         arr.sort((a: Bet, b: Bet) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         setBets(arr);
+      } else {
+        setBets([]);
       }
-    };
-    fetchBets();
+    });
+
+    return () => unsub();
   }, [user]);
 
   const filtered = bets.filter((b) =>
@@ -49,7 +54,7 @@ const MyBets = () => {
         <div className="flex bg-card rounded-lg p-1 border border-border">
           <button
             onClick={() => setTab("open")}
-            className={`flex-1 py-2 rounded-md text-xs font-bold transition-colors ${
+            className={`flex-1 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
               tab === "open" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
             }`}
           >
@@ -57,7 +62,7 @@ const MyBets = () => {
           </button>
           <button
             onClick={() => setTab("history")}
-            className={`flex-1 py-2 rounded-md text-xs font-bold transition-colors ${
+            className={`flex-1 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
               tab === "history" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
             }`}
           >
@@ -66,15 +71,19 @@ const MyBets = () => {
         </div>
 
         {filtered.length === 0 ? (
-          <div className="bg-card border border-border rounded-xl p-8 text-center">
+          <div className="bg-card border border-border rounded-xl p-8 text-center animate-fadeIn">
             <p className="text-muted-foreground text-sm">
               {tab === "open" ? "אין הימורים פתוחים 🎲" : "אין היסטוריה עדיין"}
             </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map((bet) => (
-              <div key={bet.id} className="bg-card border border-border rounded-xl p-4 space-y-2">
+            {filtered.map((bet, i) => (
+              <div
+                key={bet.id}
+                className="bg-card border border-border rounded-xl p-4 space-y-2 animate-fadeIn"
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
                 <div className="flex justify-between items-start">
                   <Badge
                     variant={

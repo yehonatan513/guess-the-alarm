@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 const tabs = [
   { path: "/", icon: "🏠", label: "בית" },
-  { path: "/build", icon: "🎰", label: "הימר" },
+  { path: "/build", icon: "🎰", label: "המר" },
   { path: "/my-bets", icon: "📋", label: "ההימורים שלי" },
   { path: "/profile", icon: "👤", label: "פרופיל" },
 ];
@@ -20,8 +20,8 @@ const BottomNav = () => {
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
-              className={`flex flex-col items-center gap-0.5 text-xs transition-colors ${
-                active ? "text-primary" : "text-muted-foreground"
+              className={`flex flex-col items-center gap-0.5 text-xs transition-all duration-200 ${
+                active ? "text-primary scale-110" : "text-muted-foreground scale-100 hover:text-foreground"
               }`}
             >
               <span className="text-xl">{tab.icon}</span>
