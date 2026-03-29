@@ -38,7 +38,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (snap.exists()) {
       const data = snap.val() as UserProfile;
 
-      // ── Migration: reset any existing coins to 500K ──
+      // ── Migration: remove any legacy 'email' from DB and reset coins ──
+      if ((data as any).email) {
+        await update(ref(db, `users/${uid}`), { email: null });
+      }
+
       const TARGET = 500_000;
       if (data.coins !== TARGET) {
         await set(ref(db, `users/${uid}/coins`), TARGET);
@@ -58,7 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatar_emoji: data.avatar_emoji,
         });
       }
-      // ─────────────────────────────────────────────────────
+      // ──────────────────────────────────────────────────────────────────
 
       setProfile(data);
       setNeedsUsername(false);

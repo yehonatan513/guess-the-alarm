@@ -2,58 +2,65 @@ import React, { useState } from "react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInWithPopup,
 } from "firebase/auth";
-import { auth, googleProvider } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 // Map Firebase error codes to user-friendly Hebrew messages
 const getFirebaseErrorMessage = (code: string): string => {
   const messages: Record<string, string> = {
-    "auth/invalid-email": "כתובת האימייל אינה תקינה",
-    "auth/user-not-found": "לא נמצא משתמש עם אימייל זה",
+    "auth/invalid-email": "שם המשתמש אינו תקין",
+    "auth/user-not-found": "שם המשתמש לא נמצא",
     "auth/wrong-password": "הסיסמה שגויה",
     "auth/invalid-credential": "פרטי ההתחברות שגויים",
-    "auth/email-already-in-use": "אימייל זה כבר רשום במערכת",
+    "auth/email-already-in-use": "שם המשתמש כבר תפוס",
     "auth/weak-password": "הסיסמה חלשה מדי — לפחות 6 תווים",
     "auth/too-many-requests": "יותר מדי ניסיונות — נסה שוב מאוחר יותר",
     "auth/network-request-failed": "בעיית רשת — בדוק את החיבור לאינטרנט",
-    "auth/popup-closed-by-user": "חלון ההתחברות נסגר לפני השלמת הפעולה",
-    "auth/cancelled-popup-request": "בקשת ההתחברות בוטלה",
   };
   return messages[code] ?? "אירעה שגיאה, נסה שוב";
 };
 
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Validate username (alphas, numbers, 3-15 chars)
+  const validateUsername = (name: string) => {
+    const regex = /^[a-zA-Z0-0א-ת._-]{3,15}$/;
+    if (!name) return "אנא הזן שם משתמש";
+    if (!regex.test(name)) return "שם משתמש חייב להיות 3-15 תווים (ללא רווחים)";
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    
+    const vError = validateUsername(username);
+    if (vError) {
+      setError(vError);
+      return;
+    }
+
+    if (!password) {
+      setError("אנא הזן סיסמה");
+      return;
+    }
+
     setLoading(true);
+    const dummyEmail = `${username.trim().toLowerCase()}@guess-the-alarm.local`;
+    
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, dummyEmail, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        await createUserWithEmailAndPassword(auth, dummyEmail, password);
       }
-    } catch (err: any) {
-      setError(getFirebaseErrorMessage(err.code));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogle = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       setError(getFirebaseErrorMessage(err.code));
     } finally {
@@ -73,12 +80,12 @@ const AuthPage = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            type="email"
-            placeholder="אימייל"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            placeholder="שם משתמש"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className="bg-card border-border text-foreground text-right"
-            dir="ltr"
+            dir="rtl"
             disabled={loading}
           />
           <Input
@@ -87,11 +94,11 @@ const AuthPage = () => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="bg-card border-border text-foreground text-right"
-            dir="ltr"
+            dir="rtl"
             disabled={loading}
           />
           {error && (
-            <p className="text-destructive text-xs bg-destructive/10 rounded-lg px-3 py-2 text-center">
+            <p className="text-destructive text-xs bg-destructive/10 rounded-lg px-3 py-2 text-center font-bold">
               {error}
             </p>
           )}
@@ -99,15 +106,6 @@ const AuthPage = () => {
             {loading ? "מתחבר..." : isLogin ? "התחבר" : "הירשם"}
           </Button>
         </form>
-
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={handleGoogle}
-          disabled={loading}
-        >
-          🔵 התחבר עם Google
-        </Button>
 
         <button
           className="w-full text-center text-sm text-muted-foreground underline"
