@@ -211,7 +211,10 @@ const TOTAL_RANGES = [
 
 // ── Generator ─────────────────────────────────────────────────────────────────
 
-export function generateBets(scope: BetScope, type: BetType, location: string): GeneratedBet[] {
+import { calculateSmartOdds } from "./odds-calculator";
+import { AlertStats } from "@/hooks/useAlertStats";
+
+export function generateBets(scope: BetScope, type: BetType, location: string, stats: AlertStats | null = null): GeneratedBet[] {
   const loc = location === "כללי" ? "" : location;
   const locSuffix = loc ? ` ב${loc}` : "";
   const encodeId = (...parts: (string | number)[]) => parts.join("|");
@@ -220,8 +223,16 @@ export function generateBets(scope: BetScope, type: BetType, location: string): 
     case "overunder": {
       const bets: GeneratedBet[] = [];
       for (const row of OU) {
-        const underMult = scope === "city" ? row.uc : scope === "region" ? row.ur : row.ug;
-        const overMult  = scope === "city" ? row.oc : scope === "region" ? row.or : row.og;
+        const underMultDefault = scope === "city" ? row.uc : scope === "region" ? row.ur : row.ug;
+        const overMultDefault  = scope === "city" ? row.oc : scope === "region" ? row.or : row.og;
+        
+        const underMult = calculateSmartOdds({
+          stats, scope, location, type: "overunder", defaultMultiplier: underMultDefault, direction: "under", threshold: row.n
+        });
+        const overMult = calculateSmartOdds({
+          stats, scope, location, type: "overunder", defaultMultiplier: overMultDefault, direction: "over", threshold: row.n
+        });
+
         bets.push({
           id: encodeId(scope, "overunder", location, "under", row.n),
           emoji: "📉",
@@ -244,7 +255,11 @@ export function generateBets(scope: BetScope, type: BetType, location: string): 
 
     case "quiet": {
       return QUIET_DURATIONS.map(({ minutes, mCity, mRegion, mGeneral }) => {
-        const mult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
+        const defaultMult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
+        const mult = calculateSmartOdds({
+          stats, scope, location, type: "quiet", defaultMultiplier: defaultMult, minutes
+        });
+
         const durationLabel = minutes < 60
           ? `${minutes} דקות`
           : minutes === 60 ? "שעה" : `${minutes / 60} שעות`;
@@ -260,8 +275,16 @@ export function generateBets(scope: BetScope, type: BetType, location: string): 
     }
 
     case "night": {
-      const yesMult = scope === "city" ? 4.2 : scope === "region" ? 2.8 : 1.8;
-      const noMult = scope === "city" ? 1.05 : scope === "region" ? 1.25 : 2.5;
+      const yesMultDefault = scope === "city" ? 4.2 : scope === "region" ? 2.8 : 1.8;
+      const noMultDefault = scope === "city" ? 1.05 : scope === "region" ? 1.25 : 2.5;
+
+      const yesMult = calculateSmartOdds({
+        stats, scope, location, type: "night", defaultMultiplier: yesMultDefault, direction: "yes"
+      });
+      const noMult = calculateSmartOdds({
+        stats, scope, location, type: "night", defaultMultiplier: noMultDefault, direction: "no"
+      });
+
       return [
         {
           id: encodeId(scope, "night", location, "yes"),
@@ -284,7 +307,11 @@ export function generateBets(scope: BetScope, type: BetType, location: string): 
 
     case "total": {
       return TOTAL_RANGES.map(({ min, max, label, mCity, mRegion, mGeneral }) => {
-        const mult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
+        const defaultMult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
+        const mult = calculateSmartOdds({
+          stats, scope, location, type: "total", defaultMultiplier: defaultMult, min, max
+        });
+
         const desc = max === null
           ? `מעל ${min} אזעקות${locSuffix} היום`
           : min === max

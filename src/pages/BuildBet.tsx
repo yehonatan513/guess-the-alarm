@@ -4,6 +4,7 @@ import {
   BetScope, BetType, GeneratedBet
 } from "@/lib/bet-generator";
 import BetModal from "@/components/BetModal";
+import { useAlertStats } from "@/hooks/useAlertStats";
 
 const SCOPE_TABS: { id: BetScope; label: string; icon: string }[] = [
   { id: "city",    label: "עיר",   icon: "🏙️" },
@@ -12,6 +13,7 @@ const SCOPE_TABS: { id: BetScope; label: string; icon: string }[] = [
 ];
 
 const BuildBet = () => {
+  const { stats } = useAlertStats();
   const [scope, setScope]           = useState<BetScope>("general");
   const [location, setLocation]     = useState<string>("כללי");
   const [citySearch, setCitySearch] = useState("");
@@ -27,9 +29,9 @@ const BuildBet = () => {
 
   const bets = useMemo(
     () => (selectedType && locationReady)
-      ? generateBets(scope, selectedType, location || "כללי")
+      ? generateBets(scope, selectedType, location || "כללי", stats)
       : [],
-    [scope, selectedType, location, locationReady]
+    [scope, selectedType, location, locationReady, stats]
   );
 
   const handleScopeChange = (s: BetScope) => {
@@ -42,8 +44,23 @@ const BuildBet = () => {
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <div className="border-b border-border px-4 py-4 mb-2">
-        <h1 className="text-primary font-black text-lg text-center">🎰 בנה הימור</h1>
+      <div className="border-b border-border px-4 py-4 mb-2 flex items-center justify-between">
+        <h1 className="text-primary font-black text-lg">🎰 בנה הימור</h1>
+        
+        {/* Smart Odds Indicator */}
+        {stats && stats.total_alerts >= 300 ? (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 text-green-500 rounded-full border border-green-500/20 text-xs font-bold animate-pulse">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            יחסים חכמים פעילים
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 text-primary rounded-full border border-primary/20 text-xs font-medium">
+            🧠 המערכת לומדת נתונים ({stats?.total_alerts || 0}/300)
+          </div>
+        )}
       </div>
 
       <div className="max-w-lg mx-auto px-4 space-y-5 mt-4">

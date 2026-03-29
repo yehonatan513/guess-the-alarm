@@ -13,6 +13,7 @@ interface Alert {
   areas: string[];
   time: string;
   type: string;
+  originalTimeSec?: number;
 }
 
 type BetScope = "city" | "region" | "general";
@@ -180,11 +181,81 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
               areas: Array.isArray(a.cities) ? a.cities : [a.cities || "אזור לא ידוע"],
               time: alertTimeSec ? new Date(alertTimeSec * 1000).toISOString() : new Date().toISOString(),
               type: a.threat === 0 ? "missiles" : String(a.threat),
+              originalTimeSec: alertTimeSec, // Keep track for stats builder
             });
           });
         }
       });
     }
+
+    // ── SMART ODDS: DATA INGESTION ──
+    const statsSnap = await db.ref("alert_stats/last_processed_time").once("value");
+    const lastProcessedTime = statsSnap.val() || 0;
+    
+    let maxTimeSeen = lastProcessedTime;
+    const newStatsUpdates: Record<string, number> = {};
+    let totalNewAlerts = 0;
+
+    // We check all historical alerts to see if any are newer than what we processed last time
+    // We only process 'allAlerts' because 'activeAlerts' are live and will eventually be in history too, 
+    // but to avoid missed live alerts, we might want to just count history since it's an archive of the day.
+    allAlerts.forEach((alert: any) => {
+      if (alert.originalTimeSec > lastProcessedTime) {
+        if (alert.originalTimeSec > maxTimeSeen) {
+          maxTimeSeen = alert.originalTimeSec;
+        }
+        totalNewAlerts++;
+        
+        // Count cities
+        alert.areas.forEach((city: string) => {
+          const sanitizedCity = city.replace(/[.#$[\]]/g, "_"); // Firebase key safe
+          newStatsUpdates[`cities/${sanitizedCity}`] = (newStatsUpdates[`cities/${sanitizedCity}`] || 0) + 1;
+          
+          // Count Region if we can find it
+          let foundRegion = "אחר";
+          for (const [regionName, citiesArr] of Object.entries(REGION_CITIES)) {
+            if (citiesArr.some(c => city.includes(c))) {
+              foundRegion = regionName;
+              break;
+            }
+          }
+          const sanitizedRegion = foundRegion.replace(/[.#$[\]]/g, "_");
+          newStatsUpdates[`regions/${sanitizedRegion}`] = (newStatsUpdates[`regions/${sanitizedRegion}`] || 0) + 1;
+        });
+      }
+    });
+
+    if (totalNewAlerts > 0) {
+      try {
+        await db.ref("alert_stats").transaction((currentData) => {
+          if (!currentData) currentData = {};
+          if (!currentData.tracking_started_at) {
+            currentData.tracking_started_at = admin.database.ServerValue.TIMESTAMP;
+          }
+          currentData.total_alerts = (currentData.total_alerts || 0) + totalNewAlerts;
+          currentData.last_processed_time = maxTimeSeen;
+          
+          if (!currentData.cities) currentData.cities = {};
+          if (!currentData.regions) currentData.regions = {};
+          
+          Object.entries(newStatsUpdates).forEach(([path, increment]) => {
+            if (path.startsWith("cities/")) {
+              const key = path.replace("cities/", "");
+              currentData.cities[key] = (currentData.cities[key] || 0) + increment;
+            } else if (path.startsWith("regions/")) {
+              const key = path.replace("regions/", "");
+              currentData.regions[key] = (currentData.regions[key] || 0) + increment;
+            }
+          });
+          
+          return currentData;
+        });
+        logger.info(`Ingested ${totalNewAlerts} new alerts into smart odds stats.`);
+      } catch (e) {
+        logger.error("Failed to update alert stats transaction", e);
+      }
+    }
+    // ────────────────────────────────
 
     // 2. Load open bets
     const snapshot = await db.ref("bets").orderByChild("status").equalTo("open").once("value");

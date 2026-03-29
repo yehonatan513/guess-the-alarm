@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import TopHeader from "./components/CoinBubble";
 import { useAlerts } from "./hooks/useAlerts";
 import { useBetResolution } from "./hooks/useBetResolution";
+import { useDataIngestion } from "./hooks/useDataIngestion";
 
 // ── Theme Context ──────────────────────────────────────────
 type Theme = "dark" | "light";
@@ -52,6 +53,7 @@ const LoggedInShell = () => {
   const { alerts, activeAlerts, todayCount } = useAlerts();
   // Always-on bet resolution — runs on every page, not just Index
   useBetResolution({ alerts, activeAlerts, todayCount });
+  useDataIngestion();
 
   return (
     <>
