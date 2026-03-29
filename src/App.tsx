@@ -13,6 +13,8 @@ import MyBets from "./pages/MyBets";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import TopHeader from "./components/CoinBubble";
+import { useAlerts } from "./hooks/useAlerts";
+import { useBetResolution } from "./hooks/useBetResolution";
 
 // ── Theme Context ──────────────────────────────────────────
 type Theme = "dark" | "light";
@@ -45,19 +47,11 @@ const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 };
 // ──────────────────────────────────────────────────────────
 
-const AppContent = () => {
-  const { user, loading, needsUsername } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-primary font-black text-xl animate-pulse">GUESS THE ALARM</p>
-      </div>
-    );
-  }
-
-  if (!user) return <AuthPage />;
-  if (needsUsername) return <UsernameModal />;
+// Inner component so hooks can access AuthContext
+const LoggedInShell = () => {
+  const { alerts, activeAlerts, todayCount } = useAlerts();
+  // Always-on bet resolution — runs on every page, not just Index
+  useBetResolution({ alerts, activeAlerts, todayCount });
 
   return (
     <>
@@ -72,6 +66,23 @@ const AppContent = () => {
       <BottomNav />
     </>
   );
+};
+
+const AppContent = () => {
+  const { user, loading, needsUsername } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-primary font-black text-xl animate-pulse">GUESS THE ALARM</p>
+      </div>
+    );
+  }
+
+  if (!user) return <AuthPage />;
+  if (needsUsername) return <UsernameModal />;
+
+  return <LoggedInShell />;
 };
 
 const App = () => (

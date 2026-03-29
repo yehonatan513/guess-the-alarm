@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/App";
 import { useAlerts } from "@/hooks/useAlerts";
-import { useBetResolution } from "@/hooks/useBetResolution";
 import { BETS, BetTemplate } from "@/lib/bets-data";
 import BetModal from "@/components/BetModal";
 import { Badge } from "@/components/ui/badge";
@@ -22,8 +21,6 @@ const Index = () => {
   const { alerts, activeAlerts, todayCount, error } = useAlerts();
   const [tab, setTab] = useState<"common" | "dynamic">("common");
 
-  // Pass alert data so useBetResolution doesn't need its own useAlerts() instance
-  useBetResolution({ alerts, activeAlerts, todayCount });
   const [selectedBet, setSelectedBet] = useState<BetTemplate | null>(null);
   const filtered = BETS.filter((b) => b.category === tab);
 

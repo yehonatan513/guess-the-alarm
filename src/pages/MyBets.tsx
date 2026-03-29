@@ -18,18 +18,19 @@ interface Bet {
 
 const formatCoins = (n: number) => n.toLocaleString("he-IL");
 
-// Calculate when an open bet expires, returns a label like "נסגר בעוד 3:42" or null
-function getBetExpiry(bet: Bet): string | null {
+// Calculate when an open bet expires
+function getBetExpiry(bet: Bet): string {
   const now = new Date().getTime();
   const created = new Date(bet.created_at).getTime();
   const end = getBetEndTime(bet.type, created);
+  const remaining = end - now;
 
-  if (end <= now) return "ממתין לפסיקה";
-  return msToLabel(end - now);
+  if (remaining <= 0) return "00:00";
+  return msToLabel(remaining);
 }
 
 function msToLabel(ms: number): string {
-  if (ms <= 0) return "ממתין לפסיקה";
+  if (ms <= 0) return "00:00";
   const totalSec = Math.floor(ms / 1000);
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
@@ -106,7 +107,8 @@ const MyBets = () => {
           <div className="space-y-3">
             {filtered.map((bet, i) => {
               const expiry = bet.status === "open" ? getBetExpiry(bet) : null;
-              const isUrgent = expiry && !expiry.includes("ממתין") && expiry.startsWith("0:");
+              const isExpiredDisplay = expiry === "00:00";
+              const isUrgent = expiry && !isExpiredDisplay && expiry.startsWith("0:");
 
               return (
                 <div
@@ -142,14 +144,14 @@ const MyBets = () => {
                   {/* Expiry countdown for open bets */}
                   {expiry && (
                     <div className={`flex items-center gap-1.5 text-xs font-mono font-bold px-2 py-1 rounded-lg w-fit ${
-                      isUrgent
+                      isExpiredDisplay
+                        ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 animate-pulse"
+                        : isUrgent
                         ? "bg-destructive/15 text-destructive"
-                        : expiry === "ממתין לפסיקה"
-                        ? "bg-muted text-muted-foreground"
                         : "bg-primary/10 text-primary"
                     }`}>
-                      <span>{expiry === "ממתין לפסיקה" ? "⏳" : isUrgent ? "🔴" : "⏱️"}</span>
-                      <span>{expiry === "ממתין לפסיקה" ? expiry : `נסגר בעוד ${expiry}`}</span>
+                      <span>{isExpiredDisplay ? "⚡" : isUrgent ? "🔴" : "⏱️"}</span>
+                      <span>{isExpiredDisplay ? "מחשב תוצאה..." : `נסגר בעוד ${expiry}`}</span>
                     </div>
                   )}
 

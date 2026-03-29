@@ -72,7 +72,7 @@ export function useAlerts() {
       }
 
       setState({
-        alerts: allAlerts.slice(0, 30),
+        alerts: allAlerts, // keep all — bet resolution needs the full history to settle old bets
         activeAlerts,
         todayCount,
         error: null,
