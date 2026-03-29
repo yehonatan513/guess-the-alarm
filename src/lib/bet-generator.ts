@@ -260,15 +260,26 @@ export function generateBets(scope: BetScope, type: BetType, location: string): 
     }
 
     case "night": {
-      const mult = scope === "city" ? 4.2 : scope === "region" ? 2.8 : 1.8;
-      return [{
-        id: encodeId(scope, "night", location),
-        emoji: "🌙",
-        title: `אזעקת לילה${locSuffix}`,
-        description: `תהיה אזעקה${locSuffix} בין 00:00-06:00 הלילה`,
-        multiplier: mult,
-        scope, type, location,
-      }];
+      const yesMult = scope === "city" ? 4.2 : scope === "region" ? 2.8 : 1.8;
+      const noMult = scope === "city" ? 1.05 : scope === "region" ? 1.25 : 2.5;
+      return [
+        {
+          id: encodeId(scope, "night", location, "yes"),
+          emoji: "🌙",
+          title: `אזעקת לילה${locSuffix}`,
+          description: `תהיה אזעקה${locSuffix} בין 00:00-06:00 הלילה`,
+          multiplier: yesMult,
+          scope, type, location,
+        },
+        {
+          id: encodeId(scope, "night", location, "no"),
+          emoji: "😴",
+          title: `לילה שקט${locSuffix}`,
+          description: `לא תהיה אזעקה${locSuffix} בין 00:00-06:00 הלילה`,
+          multiplier: noMult,
+          scope, type, location,
+        }
+      ];
     }
 
     case "total": {
@@ -298,7 +309,7 @@ export interface ParsedBetId {
   scope: BetScope;
   type: BetType;
   location: string;
-  direction?: "over" | "under";
+  direction?: "over" | "under" | "yes" | "no";
   threshold?: number;
   minutes?: number;
   min?: number;
@@ -318,7 +329,7 @@ export function parseBetId(id: string): ParsedBetId | null {
       if (parts.length < 4) return null;
       return { scope, type, location, minutes: Number(parts[3]) };
     case "night":
-      return { scope, type, location };
+      return { scope, type, location, direction: parts[3] as "yes" | "no" || "yes" };
     case "total":
       if (parts.length < 5) return null;
       return { scope, type, location, min: Number(parts[3]), max: parts[4] === "inf" ? null : Number(parts[4]) };

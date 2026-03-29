@@ -1,20 +1,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/App";
+import { toast } from "sonner";
 
 const formatCoins = (n: number): string => {
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B 🪙`;
-  if (n >= 1_000_000)     return `${(n / 1_000_000).toFixed(2)}M 🪙`;
-  if (n >= 1_000)         return `${(n / 1_000).toFixed(1)}K 🪙`;
-  return `${n.toLocaleString("he-IL")} 🪙`;
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000)     return `${(n / 1_000_000).toFixed(1)}M`;
+  return n.toLocaleString("he-IL");
 };
 
-const CoinBubble: React.FC = () => {
-  const { profile } = useAuth();
-  const [visible, setVisible] = useState(true);
+const TopHeader: React.FC = () => {
+  const { profile, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  
   const [shake, setShake] = useState(false);
   const prevCoins = useRef<number | null>(null);
 
-  // Shake animation when coins change
   useEffect(() => {
     if (prevCoins.current !== null && profile && profile.coins !== prevCoins.current) {
       setShake(true);
@@ -26,31 +27,63 @@ const CoinBubble: React.FC = () => {
   if (!profile) return null;
 
   return (
-    <div
-      className={`fixed top-3 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${
-        visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-8 pointer-events-none"
-      }`}
-    >
-      <button
-        onClick={() => setVisible(v => !v)}
-        className={`
-          flex items-center gap-1.5 px-4 py-1.5 rounded-full
-          bg-background/80 backdrop-blur-md
-          border border-primary/30
-          shadow-lg shadow-primary/20
-          text-primary font-black text-sm
-          transition-all duration-200
-          hover:border-primary/60 hover:shadow-primary/30
-          active:scale-95
-          ${shake ? "animate-wiggle" : ""}
-        `}
-        title="לחץ להסתרה"
-      >
-        <span className="text-base">🪙</span>
-        <span className="tabular-nums">{formatCoins(profile.coins)}</span>
-      </button>
+    <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b border-border px-4 py-3">
+      <div className="flex justify-between items-center max-w-lg mx-auto">
+        
+        {/* Left: Coins */}
+        <div className={`flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20 ${shake ? "animate-wiggle" : ""}`}>
+          <span className="text-xl">🪙</span>
+          <span className="text-primary font-black text-lg">{formatCoins(profile.coins)}</span>
+        </div>
+
+        {/* Center: Title */}
+        <h1 className="text-primary font-black text-sm tracking-widest mx-2 truncate">
+          GUESS THE ALARM
+        </h1>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={async () => {
+              const shareData = {
+                title: "Guess The Alarm 🚀",
+                text: "בוא להמר על אזעקות! 🎰🚨",
+                url: window.location.origin,
+              };
+              try {
+                if (navigator.share) {
+                  await navigator.share(shareData);
+                } else {
+                  await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
+                  toast.success("הקישור הועתק! 📋");
+                }
+              } catch { /* user cancelled share */ }
+            }}
+            className="text-lg w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all active:scale-95"
+            title="שתף"
+          >
+            🔗
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="text-lg w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all active:scale-95"
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
+        </div>
+      </div>
+      
+      {/* Sub-row for user name / logout */}
+      <div className="flex justify-between items-center max-w-lg mx-auto mt-2 px-1">
+        <span className="text-muted-foreground text-xs font-bold">
+          {profile.avatar_emoji} {profile.username}
+        </span>
+        <button onClick={logout} className="text-xs text-muted-foreground underline hover:text-foreground">
+          יציאה
+        </button>
+      </div>
     </div>
   );
 };
 
-export default CoinBubble;
+export default TopHeader;

@@ -87,6 +87,15 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
           const endTime = getBetEndTime(bet.type, betCreatedMs);
           const isExpired = now.getTime() >= endTime;
 
+          const hasAlertInWindow = (startMs: number, endMs: number, condition?: (a: Alert) => boolean) => {
+            return alerts.some(a => {
+              const t = new Date(a.time).getTime();
+              if (t <= startMs || t >= endMs) return false;
+              if (condition && !condition(a)) return false;
+              return true;
+            });
+          };
+
           switch (bet.type) {
             case "b2": {
               if (todayCount > 20) result = "win";
@@ -94,22 +103,17 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
               break;
             }
             case "b1": {
-              if (hour >= 0 && hour < 6) {
-                const allCities = activeAlerts.flatMap(a => a.areas);
-                if (allCities.some(c => c.includes("שומר"))) result = "win";
-              } else if (isExpired) {
-                result = "loss";
-              }
+              const startNight = endTime - 6 * 60 * 60 * 1000;
+              const hasNightDan = hasAlertInWindow(startNight, endTime, a => 
+                alertMatchesLocation(a.areas, "region", "גוש דן") || a.areas.some(c => c.includes("תל אביב"))
+              );
+              if (hasNightDan) result = "win";
+              else if (isExpired) result = "loss";
               break;
             }
             case "b3": {
               const centralCities = alerts.filter(a =>
-                a.areas.some(c =>
-                  c.includes("תל אביב") || c.includes("רמת גן") || c.includes("גבעתיים") ||
-                  c.includes("בני ברק") || c.includes("חולון") || c.includes("בת ים") ||
-                  c.includes("הרצליה") || c.includes("רעננה") || c.includes("כפר סבא") ||
-                  c.includes("פתח תקווה") || c.includes("ראשון") || c.includes("רחובות")
-                )
+                alertMatchesLocation(a.areas, "region", "גוש דן") || a.areas.some(c => c.includes("תל אביב"))
               );
               if (centralCities.length > 10) result = "win";
               else if (isExpired) result = "loss";
@@ -118,17 +122,13 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
             case "b4":
             case "b10":
             case "b16": {
-              const delay = bet.type === "b4" ? 60 : bet.type === "b10" ? 5 : 30;
-              if (isExpired) {
-                const alertsDuringPeriod = alerts.filter(a => {
-                  const t = new Date(a.time).getTime();
-                  return t > betCreatedMs && t < endTime;
-                });
-                if (bet.type === "b10") {
-                   result = alertsDuringPeriod.length > 0 ? "win" : "loss";
-                } else {
-                   result = alertsDuringPeriod.length === 0 ? "win" : "loss";
-                }
+              const hasAlert = hasAlertInWindow(betCreatedMs, endTime);
+              if (bet.type === "b10") {
+                 if (hasAlert) result = "win";
+                 else if (isExpired) result = "loss";
+              } else {
+                 if (hasAlert) result = "loss";
+                 else if (isExpired) result = "win";
               }
               break;
             }
@@ -143,8 +143,8 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
               break;
             }
             case "b14": {
-              const allCities = [...alerts, ...activeAlerts].flatMap(a => a.areas);
-              if (allCities.some(c => c.includes("תל אביב"))) result = "win";
+              const hasTA = alerts.some(a => a.areas.some(c => c.includes("תל אביב")));
+              if (hasTA) result = "win";
               else if (isExpired) result = "loss";
               break;
             }
@@ -172,29 +172,32 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
                       break;
                     }
                     case "quiet": {
-                      if (isExpired) {
-                        const hasAlert = alerts.some(a => {
-                          const t = new Date(a.time).getTime();
-                          return t > betCreatedMs && t < endTime && matchAlert(a.areas);
-                        });
-                        result = hasAlert ? "loss" : "win";
-                      }
+                      const hasAlert = hasAlertInWindow(betCreatedMs, endTime, a => matchAlert(a.areas));
+                      if (hasAlert) result = "loss";
+                      else if (isExpired) result = "win";
                       break;
                     }
                     case "night": {
-                      if (hour >= 0 && hour < 6) {
-                        const hasNight = activeAlerts.some(a => matchAlert(a.areas));
+                      const startNight = endTime - 6 * 60 * 60 * 1000;
+                      const hasNight = hasAlertInWindow(startNight, endTime, a => matchAlert(a.areas));
+                      const direction = parsed.direction || "yes"; // default backwards-compatible
+                      
+                      if (direction === "yes") {
                         if (hasNight) result = "win";
-                      } else if (isExpired) {
-                        result = "loss";
+                        else if (isExpired) result = "loss";
+                      } else {
+                        if (hasNight) result = "loss";
+                        else if (isExpired) result = "win";
                       }
                       break;
                     }
                     case "total": {
-                      if (isExpired) {
-                        const count = countInLocation();
-                        const { min, max } = parsed;
-                        const inRange = count >= min! && (max === null || count <= max!);
+                      const count = countInLocation();
+                      const { min, max } = parsed;
+                      if (max !== null && count > max) {
+                        result = "loss";
+                      } else if (isExpired) {
+                        const inRange = count >= min! && (max === null || count <= max);
                         result = inRange ? "win" : "loss";
                       }
                       break;

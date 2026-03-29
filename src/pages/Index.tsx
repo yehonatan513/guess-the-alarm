@@ -29,50 +29,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      {/* Header */}
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-4 py-3">
-        <div className="flex justify-between items-center max-w-lg mx-auto">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🪙</span>
-            <span className="text-primary font-black text-xl">{profile ? formatCoins(profile.coins) : "0"}</span>
-          </div>
-          <h1 className="text-primary font-black text-sm tracking-widest">GUESS THE ALARM</h1>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={async () => {
-                const shareData = {
-                  title: "Guess The Alarm 🚀",
-                  text: "בוא להמר על אזעקות! 🎰🚨",
-                  url: window.location.origin,
-                };
-                try {
-                  if (navigator.share) {
-                    await navigator.share(shareData);
-                  } else {
-                    await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
-                    toast.success("הקישור הועתק! 📋");
-                  }
-                } catch { /* user cancelled share */ }
-              }}
-              className="text-xl w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all duration-200 active:scale-90"
-              title="שתף את האתר"
-            >
-              🔗
-            </button>
-            <button
-              onClick={toggleTheme}
-              className="text-xl w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all duration-200 active:scale-90"
-              title={theme === "dark" ? "עבור למצב בהיר" : "עבור למצב כהה"}
-            >
-              {theme === "dark" ? "☀️" : "🌙"}
-            </button>
-          </div>
-        </div>
-        <div className="flex justify-between items-center max-w-lg mx-auto mt-1">
-          <span className="text-muted-foreground text-xs">{profile?.avatar_emoji} {profile?.username}</span>
-          <button onClick={logout} className="text-xs text-muted-foreground underline">יציאה</button>
-        </div>
-      </div>
+      {/* Global TopHeader is handling the top bar now */}
 
       <div className="max-w-lg mx-auto px-4 space-y-4 mt-4">
         {/* Active alert banner */}

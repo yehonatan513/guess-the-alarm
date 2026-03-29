@@ -12,7 +12,7 @@ import BuildBet from "./pages/BuildBet";
 import MyBets from "./pages/MyBets";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
-import CoinBubble from "./components/CoinBubble";
+import TopHeader from "./components/CoinBubble";
 
 // ── Theme Context ──────────────────────────────────────────
 type Theme = "dark" | "light";
@@ -61,7 +61,7 @@ const AppContent = () => {
 
   return (
     <>
-      <CoinBubble />
+      <TopHeader />
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/build" element={<BuildBet />} />

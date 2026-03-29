@@ -42,7 +42,7 @@ const BuildBet = () => {
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-4 py-4">
+      <div className="border-b border-border px-4 py-4 mb-2">
         <h1 className="text-primary font-black text-lg text-center">🎰 בנה הימור</h1>
       </div>
 
