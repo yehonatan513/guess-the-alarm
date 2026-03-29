@@ -41,13 +41,25 @@ const Profile = () => {
   const fetchLeaderboard = useCallback(async () => {
     setLoadingLeaders(true);
     try {
-      const snap = await get(query(ref(db, "leaderboard"), orderByChild("coins"), limitToLast(20)));
+      // Primary: leaderboard node (populated on login + coin update)
+      const snap = await get(query(ref(db, "leaderboard"), orderByChild("coins"), limitToLast(50)));
       if (snap.exists()) {
         const data = snap.val();
         const arr = Object.entries(data)
           .map(([uid, v]: any) => ({ uid, ...v }))
           .sort((a, b) => b.coins - a.coins);
         setLeaders(arr);
+      } else {
+        // Fallback: read directly from users node
+        const usersSnap = await get(ref(db, "users"));
+        if (usersSnap.exists()) {
+          const data = usersSnap.val();
+          const arr = Object.entries(data)
+            .map(([uid, v]: any) => ({ uid, username: v.username, coins: v.coins, avatar_emoji: v.avatar_emoji }))
+            .sort((a, b) => b.coins - a.coins)
+            .slice(0, 50);
+          setLeaders(arr);
+        }
       }
     } finally {
       setLoadingLeaders(false);

@@ -38,13 +38,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (snap.exists()) {
       const data = snap.val() as UserProfile;
 
-      // ── One-time migration: reset old 500M default to 1M ──
-      const OLD_DEFAULT = 500_000_000;
-      if (data.coins === OLD_DEFAULT) {
-        const newCoins = 1_000_000;
-        await set(ref(db, `users/${uid}/coins`), newCoins);
-        await set(ref(db, `leaderboard/${uid}/coins`), newCoins);
-        data.coins = newCoins;
+      // ── Migration: reset any existing coins to 500K ──
+      const TARGET = 500_000;
+      if (data.coins !== TARGET) {
+        await set(ref(db, `users/${uid}/coins`), TARGET);
+        await set(ref(db, `leaderboard/${uid}/coins`), TARGET);
+        // Also write the full leaderboard entry in case it was missing
+        await set(ref(db, `leaderboard/${uid}`), {
+          username: data.username,
+          coins: TARGET,
+          avatar_emoji: data.avatar_emoji,
+        });
+        data.coins = TARGET;
+      } else {
+        // Always ensure leaderboard entry exists for live users
+        await set(ref(db, `leaderboard/${uid}`), {
+          username: data.username,
+          coins: data.coins,
+          avatar_emoji: data.avatar_emoji,
+        });
       }
       // ─────────────────────────────────────────────────────
 
