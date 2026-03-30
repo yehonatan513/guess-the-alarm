@@ -16,17 +16,25 @@ import TopHeader from "./components/CoinBubble";
 import { useAlerts } from "./hooks/useAlerts";
 import { useBetResolution } from "./hooks/useBetResolution";
 import { useDataIngestion } from "./hooks/useDataIngestion";
+import { runRegionMigration } from "./utils/migrateRegions";
 
 // ── Theme Context ──────────────────────────────────────────
 type Theme = "dark" | "light";
-interface ThemeContextType { theme: Theme; toggleTheme: () => void; }
-const ThemeContext = createContext<ThemeContextType>({ theme: "dark", toggleTheme: () => {} });
+
+export const ThemeContext = createContext<{
+  theme: Theme;
+  toggleTheme: () => void;
+}>({
+  theme: "dark",
+  toggleTheme: () => {},
+});
+
 export const useTheme = () => useContext(ThemeContext);
 
-const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
-  const [theme, setTheme] = useState<Theme>(() => {
-    return (localStorage.getItem("theme") as Theme) ?? "dark";
-  });
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [theme, setTheme] = useState<Theme>(
+    () => (localStorage.getItem("theme") as Theme) || "dark"
+  );
 
   useEffect(() => {
     const root = document.documentElement;
@@ -54,6 +62,15 @@ const LoggedInShell = () => {
   // Always-on bet resolution — runs on every page, not just Index
   useBetResolution({ alerts, activeAlerts, todayCount });
   useDataIngestion();
+
+  // Run region migration once
+  useEffect(() => {
+    if (localStorage.getItem("regions_migrated_v3") !== "true") {
+      runRegionMigration().then(() => {
+        localStorage.setItem("regions_migrated_v3", "true");
+      });
+    }
+  }, []);
 
   return (
     <>
