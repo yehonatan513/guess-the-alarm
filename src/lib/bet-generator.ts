@@ -110,7 +110,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
       return QUIET_DURATIONS.map(({ minutes, mCity, mRegion, mGeneral }) => {
         const defaultMult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
         const mult = calculateSmartOdds({
-          stats, scope, location, type: "quiet", defaultMultiplier: defaultMult, minutes
+          stats, scope, location, type: "quiet", defaultMultiplier: defaultMult, minutes, todayCount, minutesLeftToday
         });
 
         const durationLabel = minutes < 60
