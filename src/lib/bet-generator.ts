@@ -170,7 +170,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
         const resolved = todayCount > effectiveMax || (todayCount < min && minutesLeftToday === 0);
 
         const desc = max === null
-          ? `מעל ${min} אזעקות${locSuffix} היום`
+          ? `מעל ${min - 1} אזעקות${locSuffix} היום`
           : min === max
             ? `בדיוק ${min} אזעקות${locSuffix} היום`
             : `בין ${min} ל-${max} אזעקות${locSuffix} היום`;
