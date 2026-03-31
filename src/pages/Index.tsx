@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/App";
-import { useAlerts } from "@/hooks/useAlerts";
+import { useAlertsContext } from "@/contexts/AlertsContext";
 import { BETS, BetTemplate } from "@/lib/bets-data";
 import BetModal from "@/components/BetModal";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,7 @@ const formatCoins = (n: number) => {
 const Index = () => {
   const { profile, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { alerts, activeAlerts, todayCount, error } = useAlerts();
+  const { alerts, activeAlerts, todayCount, error } = useAlertsContext();
   const [tab, setTab] = useState<"common" | "dynamic">("common");
 
   const [selectedBet, setSelectedBet] = useState<BetTemplate | null>(null);

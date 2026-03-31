@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { AlertsProvider, useAlertsContext } from "@/contexts/AlertsContext";
 import AuthPage from "./pages/AuthPage";
 import UsernameModal from "./components/UsernameModal";
 import BottomNav from "./components/BottomNav";
@@ -13,7 +14,6 @@ import MyBets from "./pages/MyBets";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import TopHeader from "./components/CoinBubble";
-import { useAlerts } from "./hooks/useAlerts";
 import { useBetResolution } from "./hooks/useBetResolution";
 import { useDataIngestion } from "./hooks/useDataIngestion";
 import { runRegionMigration } from "./utils/migrateRegions";
@@ -58,7 +58,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
 // Inner component so hooks can access AuthContext
 const LoggedInShell = () => {
-  const { alerts, activeAlerts, todayCount } = useAlerts();
+  const { alerts, activeAlerts, todayCount } = useAlertsContext();
   // Always-on bet resolution — runs on every page, not just Index
   useBetResolution({ alerts, activeAlerts, todayCount });
   useDataIngestion();
@@ -111,7 +111,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <AppContent />
+          <AlertsProvider>
+            <AppContent />
+          </AlertsProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

@@ -205,7 +205,7 @@ export function parseBetId(id: string): ParsedBetId | null {
       if (parts.length < 4) return null;
       return { scope, type, location, minutes: Number(parts[3]) };
     case "night":
-      return { scope, type, location, direction: parts[3] as "yes" | "no" || "yes" };
+      return { scope, type, location, direction: (parts[3] === "no" ? "no" : "yes") };
     case "total":
       if (parts.length < 5) return null;
       return { scope, type, location, min: Number(parts[3]), max: parts[4] === "inf" ? null : Number(parts[4]) };
