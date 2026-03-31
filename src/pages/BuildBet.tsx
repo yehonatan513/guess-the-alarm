@@ -5,6 +5,7 @@ import {
 } from "@/lib/bet-generator";
 import BetModal from "@/components/BetModal";
 import { useAlertStats } from "@/hooks/useAlertStats";
+import { useAlertsContext } from "@/contexts/AlertsContext";
 
 const SCOPE_TABS: { id: BetScope; label: string; icon: string }[] = [
   { id: "city",    label: "עיר",   icon: "🏙️" },
@@ -14,6 +15,7 @@ const SCOPE_TABS: { id: BetScope; label: string; icon: string }[] = [
 
 const BuildBet = () => {
   const { stats } = useAlertStats();
+  const { todayCount } = useAlertsContext();
   const [scope, setScope]           = useState<BetScope>("general");
   const [location, setLocation]     = useState<string>("כללי");
   const [citySearch, setCitySearch] = useState("");
@@ -27,11 +29,18 @@ const BuildBet = () => {
 
   const locationReady = scope === "general" || (!!location && location !== "כללי");
 
+  const minutesLeftToday = useMemo(() => {
+    const now = new Date();
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 0, 0, 0);
+    return Math.max(0, Math.floor((endOfDay.getTime() - now.getTime()) / 60000));
+  }, []);
+
   const bets = useMemo(
     () => (selectedType && locationReady)
-      ? generateBets(scope, selectedType, location || "כללי", stats)
+      ? generateBets(scope, selectedType, location || "כללי", stats, todayCount, minutesLeftToday)
       : [],
-    [scope, selectedType, location, locationReady, stats]
+    [scope, selectedType, location, locationReady, stats, todayCount, minutesLeftToday]
   );
 
   const handleScopeChange = (s: BetScope) => {
