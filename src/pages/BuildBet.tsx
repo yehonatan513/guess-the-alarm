@@ -184,24 +184,36 @@ const BuildBet = () => {
               {scope === "general" ? "שלב 3" : "שלב 4"} — בחר הימור
             </p>
             <div className="space-y-2">
-              {bets.map((bet, i) => (
-                <button
-                  key={bet.id}
-                  onClick={() => setSelectedBet(bet)}
-                  className="w-full bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between hover:border-primary/60 hover:bg-primary/5 transition-all duration-150 active:scale-98 animate-fadeIn"
-                  style={{ animationDelay: `${i * 35}ms` }}
-                >
-                  <span className="bg-primary/15 text-primary font-black text-sm px-2 py-0.5 rounded-md">
-                    x{bet.multiplier}
-                  </span>
-                  <div className="text-right">
-                    <p className="text-foreground text-sm font-bold">
-                      {bet.emoji} {bet.title}
-                    </p>
-                    <p className="text-muted-foreground text-xs mt-0.5">{bet.description}</p>
-                  </div>
-                </button>
-              ))}
+              {bets.map((bet, i) => {
+                const isLocked = bet.multiplier === -1;
+                return (
+                  <button
+                    key={bet.id}
+                    onClick={() => !isLocked && setSelectedBet(bet)}
+                    className={`w-full bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between transition-all duration-150 animate-fadeIn ${
+                      isLocked
+                        ? "opacity-40 cursor-not-allowed"
+                        : "hover:border-primary/60 hover:bg-primary/5 active:scale-98"
+                    }`}
+                    style={{ animationDelay: `${i * 35}ms` }}
+                    disabled={isLocked}
+                  >
+                    {isLocked ? (
+                      <span className="text-xs text-muted-foreground font-bold">הוכרע היום ✓</span>
+                    ) : (
+                      <span className="bg-primary/15 text-primary font-black text-sm px-2 py-0.5 rounded-md">
+                        x{bet.multiplier}
+                      </span>
+                    )}
+                    <div className="text-right">
+                      <p className="text-foreground text-sm font-bold">
+                        {bet.emoji} {bet.title}
+                      </p>
+                      <p className="text-muted-foreground text-xs mt-0.5">{bet.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
