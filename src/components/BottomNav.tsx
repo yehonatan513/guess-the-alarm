@@ -2,7 +2,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 const tabs = [
   { path: "/", icon: "🏠", label: "בית" },
-  { path: "/build", icon: "🎰", label: "המר" },
   { path: "/my-bets", icon: "📋", label: "ההימורים שלי" },
   { path: "/profile", icon: "👤", label: "פרופיל" },
 ];
