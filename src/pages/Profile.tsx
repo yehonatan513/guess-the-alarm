@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { ref, get, query, orderByChild, limitToLast } from "firebase/database";
+import { ref, get, query, orderByChild, limitToLast, push } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { CreateGroupDialog } from "@/components/profile/CreateGroupDialog";
 import { JoinGroupDialog } from "@/components/profile/JoinGroupDialog";
 import { GroupDetailDialog } from "@/components/profile/GroupDetailDialog";
