@@ -91,7 +91,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
           emoji: "📉",
           title: `אנדר ${row.n}${locSuffix} היום`,
           description: `פחות מ-${row.n} אזעקות${locSuffix} היום`,
-          multiplier: underMult,
+          multiplier: underResolved ? -1 : underMult,
           scope, type, location,
         });
         bets.push({
