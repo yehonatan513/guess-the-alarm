@@ -63,7 +63,7 @@ const TOTAL_RANGES = [
 import { calculateSmartOdds } from "./odds-calculator";
 import { AlertStats } from "@/hooks/useAlertStats";
 
-export function generateBets(scope: BetScope, type: BetType, location: string, stats: AlertStats | null = null): GeneratedBet[] {
+export function generateBets(scope: BetScope, type: BetType, location: string, stats: AlertStats | null = null, todayCount: number = 0, minutesLeftToday: number = 1440): GeneratedBet[] {
   const loc = location === "כללי" ? "" : location;
   const locSuffix = loc ? ` ב${loc}` : "";
   const encodeId = (...parts: (string | number)[]) => parts.join("|");
@@ -76,18 +76,22 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
         const overMultDefault  = scope === "city" ? row.oc : scope === "region" ? row.or : row.og;
         
         const underMult = calculateSmartOdds({
-          stats, scope, location, type: "overunder", defaultMultiplier: underMultDefault, direction: "under", threshold: row.n
+          stats, scope, location, type: "overunder", defaultMultiplier: underMultDefault, direction: "under", threshold: row.n, todayCount, minutesLeftToday
         });
         const overMult = calculateSmartOdds({
-          stats, scope, location, type: "overunder", defaultMultiplier: overMultDefault, direction: "over", threshold: row.n
+          stats, scope, location, type: "overunder", defaultMultiplier: overMultDefault, direction: "over", threshold: row.n, todayCount, minutesLeftToday
         });
+
+        // Check if already resolved
+        const underResolved = todayCount >= row.n; // can't go under anymore
+        const overResolved = todayCount > row.n;   // already passed threshold
 
         bets.push({
           id: encodeId(scope, "overunder", location, "under", row.n),
           emoji: "📉",
           title: `אנדר ${row.n}${locSuffix} היום`,
           description: `פחות מ-${row.n} אזעקות${locSuffix} היום`,
-          multiplier: underMult,
+          multiplier: underResolved ? -1 : underMult,
           scope, type, location,
         });
         bets.push({
@@ -95,7 +99,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
           emoji: "📈",
           title: `אובר ${row.n}${locSuffix} היום`,
           description: `מעל ${row.n} אזעקות${locSuffix} היום`,
-          multiplier: overMult,
+          multiplier: overResolved ? -1 : overMult,
           scope, type, location,
         });
       }
@@ -106,7 +110,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
       return QUIET_DURATIONS.map(({ minutes, mCity, mRegion, mGeneral }) => {
         const defaultMult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
         const mult = calculateSmartOdds({
-          stats, scope, location, type: "quiet", defaultMultiplier: defaultMult, minutes
+          stats, scope, location, type: "quiet", defaultMultiplier: defaultMult, minutes, todayCount, minutesLeftToday
         });
 
         const durationLabel = minutes < 60
@@ -128,10 +132,10 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
       const noMultDefault = scope === "city" ? 1.05 : scope === "region" ? 1.25 : 2.5;
 
       const yesMult = calculateSmartOdds({
-        stats, scope, location, type: "night", defaultMultiplier: yesMultDefault, direction: "yes"
+        stats, scope, location, type: "night", defaultMultiplier: yesMultDefault, direction: "yes", todayCount, minutesLeftToday
       });
       const noMult = calculateSmartOdds({
-        stats, scope, location, type: "night", defaultMultiplier: noMultDefault, direction: "no"
+        stats, scope, location, type: "night", defaultMultiplier: noMultDefault, direction: "no", todayCount, minutesLeftToday
       });
 
       return [
@@ -158,8 +162,12 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
       return TOTAL_RANGES.map(({ min, max, label, mCity, mRegion, mGeneral }) => {
         const defaultMult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
         const mult = calculateSmartOdds({
-          stats, scope, location, type: "total", defaultMultiplier: defaultMult, min, max
+          stats, scope, location, type: "total", defaultMultiplier: defaultMult, min, max, todayCount, minutesLeftToday
         });
+
+        // Check if already resolved
+        const effectiveMax = max !== null ? max : Infinity;
+        const resolved = todayCount > effectiveMax || (todayCount < min && minutesLeftToday === 0);
 
         const desc = max === null
           ? `מעל ${min} אזעקות${locSuffix} היום`
@@ -171,7 +179,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
           emoji: "📊",
           title: `${label}${locSuffix} היום`,
           description: desc,
-          multiplier: mult,
+          multiplier: resolved ? -1 : mult,
           scope, type, location,
         };
       });

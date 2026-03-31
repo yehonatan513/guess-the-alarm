@@ -5,6 +5,7 @@ import {
 } from "@/lib/bet-generator";
 import BetModal from "@/components/BetModal";
 import { useAlertStats } from "@/hooks/useAlertStats";
+import { useAlertsContext } from "@/contexts/AlertsContext";
 
 const SCOPE_TABS: { id: BetScope; label: string; icon: string }[] = [
   { id: "city",    label: "עיר",   icon: "🏙️" },
@@ -14,6 +15,7 @@ const SCOPE_TABS: { id: BetScope; label: string; icon: string }[] = [
 
 const BuildBet = () => {
   const { stats } = useAlertStats();
+  const { todayCount } = useAlertsContext();
   const [scope, setScope]           = useState<BetScope>("general");
   const [location, setLocation]     = useState<string>("כללי");
   const [citySearch, setCitySearch] = useState("");
@@ -27,11 +29,18 @@ const BuildBet = () => {
 
   const locationReady = scope === "general" || (!!location && location !== "כללי");
 
+  const minutesLeftToday = useMemo(() => {
+    const now = new Date();
+    const endOfDay = new Date(now);
+    endOfDay.setHours(23, 0, 0, 0);
+    return Math.max(0, Math.floor((endOfDay.getTime() - now.getTime()) / 60000));
+  }, []);
+
   const bets = useMemo(
     () => (selectedType && locationReady)
-      ? generateBets(scope, selectedType, location || "כללי", stats)
+      ? generateBets(scope, selectedType, location || "כללי", stats, todayCount, minutesLeftToday)
       : [],
-    [scope, selectedType, location, locationReady, stats]
+    [scope, selectedType, location, locationReady, stats, todayCount, minutesLeftToday]
   );
 
   const handleScopeChange = (s: BetScope) => {
@@ -175,24 +184,36 @@ const BuildBet = () => {
               {scope === "general" ? "שלב 3" : "שלב 4"} — בחר הימור
             </p>
             <div className="space-y-2">
-              {bets.map((bet, i) => (
-                <button
-                  key={bet.id}
-                  onClick={() => setSelectedBet(bet)}
-                  className="w-full bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between hover:border-primary/60 hover:bg-primary/5 transition-all duration-150 active:scale-98 animate-fadeIn"
-                  style={{ animationDelay: `${i * 35}ms` }}
-                >
-                  <span className="bg-primary/15 text-primary font-black text-sm px-2 py-0.5 rounded-md">
-                    x{bet.multiplier}
-                  </span>
-                  <div className="text-right">
-                    <p className="text-foreground text-sm font-bold">
-                      {bet.emoji} {bet.title}
-                    </p>
-                    <p className="text-muted-foreground text-xs mt-0.5">{bet.description}</p>
-                  </div>
-                </button>
-              ))}
+              {bets.map((bet, i) => {
+                const isLocked = bet.multiplier === -1;
+                return (
+                  <button
+                    key={bet.id}
+                    onClick={() => !isLocked && setSelectedBet(bet)}
+                    className={`w-full bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between transition-all duration-150 animate-fadeIn ${
+                      isLocked
+                        ? "opacity-40 cursor-not-allowed"
+                        : "hover:border-primary/60 hover:bg-primary/5 active:scale-98"
+                    }`}
+                    style={{ animationDelay: `${i * 35}ms` }}
+                    disabled={isLocked}
+                  >
+                    {isLocked ? (
+                      <span className="text-xs text-muted-foreground font-bold">הוכרע היום ✓</span>
+                    ) : (
+                      <span className="bg-primary/15 text-primary font-black text-sm px-2 py-0.5 rounded-md">
+                        x{bet.multiplier}
+                      </span>
+                    )}
+                    <div className="text-right">
+                      <p className="text-foreground text-sm font-bold">
+                        {bet.emoji} {bet.title}
+                      </p>
+                      <p className="text-muted-foreground text-xs mt-0.5">{bet.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
