@@ -99,7 +99,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
           emoji: "📈",
           title: `אובר ${row.n}${locSuffix} היום`,
           description: `מעל ${row.n} אזעקות${locSuffix} היום`,
-          multiplier: overMult,
+          multiplier: overResolved ? -1 : overMult,
           scope, type, location,
         });
       }
