@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { ref, get, query, orderByChild, limitToLast } from "firebase/database";
+import { ref, get, query, orderByChild, limitToLast, push } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { CreateGroupDialog } from "@/components/profile/CreateGroupDialog";
 import { JoinGroupDialog } from "@/components/profile/JoinGroupDialog";
 import { GroupDetailDialog } from "@/components/profile/GroupDetailDialog";
@@ -226,12 +229,94 @@ const Profile = () => {
             )}
           </div>
         )}
+        {/* Feedback Section */}
+        <FeedbackSection userId={user?.uid} username={profile?.username} />
       </div>
 
       <CreateGroupDialog open={showCreate} onOpenChange={setShowCreate} onSuccess={fetchGroups} />
       <JoinGroupDialog open={showJoin} onOpenChange={setShowJoin} onSuccess={fetchGroups} />
       <GroupDetailDialog group={selectedGroup} onClose={() => setSelectedGroup(null)} />
     </div>
+  );
+};
+
+// ── Feedback Section ────────────────────────────────────────────────────────
+
+const FeedbackSection: React.FC<{ userId?: string; username?: string }> = ({ userId, username }) => {
+  const [feedbackType, setFeedbackType] = useState<"bug" | "suggestion" | null>(null);
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!text.trim() || !feedbackType || !userId) return;
+    setSubmitting(true);
+    try {
+      await push(ref(db, "feedback"), {
+        type: feedbackType,
+        text: text.trim(),
+        userId,
+        username: username || "אנונימי",
+        createdAt: Date.now(),
+      });
+      toast.success("תודה על הפידבק! 🙏");
+      setText("");
+      setFeedbackType(null);
+    } catch {
+      toast.error("משהו השתבש, נסה שוב");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const close = () => { setText(""); setFeedbackType(null); };
+
+  return (
+    <>
+      <div className="flex gap-2 mt-6 mb-4">
+        <Button
+          variant="outline"
+          className="flex-1 text-xs font-bold"
+          onClick={() => setFeedbackType("bug")}
+        >
+          🐛 דווח על באג
+        </Button>
+        <Button
+          variant="outline"
+          className="flex-1 text-xs font-bold"
+          onClick={() => setFeedbackType("suggestion")}
+        >
+          💡 הצע שיפור
+        </Button>
+      </div>
+
+      <Dialog open={!!feedbackType} onOpenChange={(open) => { if (!open) close(); }}>
+        <DialogContent className="bg-card border-border max-w-sm mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-foreground text-right">
+              {feedbackType === "bug" ? "🐛 דווח על באג" : "💡 הצע שיפור"}
+            </DialogTitle>
+          </DialogHeader>
+          <Textarea
+            placeholder={feedbackType === "bug" ? "תאר את הבאג שמצאת..." : "מה היית רוצה לשפר?"}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="bg-secondary border-border text-foreground min-h-[120px]"
+            dir="rtl"
+          />
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={close} className="text-xs">ביטול</Button>
+            <Button onClick={handleSubmit} disabled={!text.trim() || submitting} className="text-xs font-bold">
+              {submitting ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                  שולח...
+                </span>
+              ) : "שליחה"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
