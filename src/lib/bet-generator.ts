@@ -132,10 +132,10 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
       const noMultDefault = scope === "city" ? 1.05 : scope === "region" ? 1.25 : 2.5;
 
       const yesMult = calculateSmartOdds({
-        stats, scope, location, type: "night", defaultMultiplier: yesMultDefault, direction: "yes"
+        stats, scope, location, type: "night", defaultMultiplier: yesMultDefault, direction: "yes", todayCount, minutesLeftToday
       });
       const noMult = calculateSmartOdds({
-        stats, scope, location, type: "night", defaultMultiplier: noMultDefault, direction: "no"
+        stats, scope, location, type: "night", defaultMultiplier: noMultDefault, direction: "no", todayCount, minutesLeftToday
       });
 
       return [
