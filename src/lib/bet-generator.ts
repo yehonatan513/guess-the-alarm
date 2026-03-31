@@ -76,11 +76,15 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
         const overMultDefault  = scope === "city" ? row.oc : scope === "region" ? row.or : row.og;
         
         const underMult = calculateSmartOdds({
-          stats, scope, location, type: "overunder", defaultMultiplier: underMultDefault, direction: "under", threshold: row.n
+          stats, scope, location, type: "overunder", defaultMultiplier: underMultDefault, direction: "under", threshold: row.n, todayCount, minutesLeftToday
         });
         const overMult = calculateSmartOdds({
-          stats, scope, location, type: "overunder", defaultMultiplier: overMultDefault, direction: "over", threshold: row.n
+          stats, scope, location, type: "overunder", defaultMultiplier: overMultDefault, direction: "over", threshold: row.n, todayCount, minutesLeftToday
         });
+
+        // Check if already resolved
+        const underResolved = todayCount >= row.n; // can't go under anymore
+        const overResolved = todayCount > row.n;   // already passed threshold
 
         bets.push({
           id: encodeId(scope, "overunder", location, "under", row.n),
