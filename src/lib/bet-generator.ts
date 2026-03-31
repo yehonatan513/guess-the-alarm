@@ -162,8 +162,12 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
       return TOTAL_RANGES.map(({ min, max, label, mCity, mRegion, mGeneral }) => {
         const defaultMult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
         const mult = calculateSmartOdds({
-          stats, scope, location, type: "total", defaultMultiplier: defaultMult, min, max
+          stats, scope, location, type: "total", defaultMultiplier: defaultMult, min, max, todayCount, minutesLeftToday
         });
+
+        // Check if already resolved
+        const effectiveMax = max !== null ? max : Infinity;
+        const resolved = todayCount > effectiveMax || (todayCount < min && minutesLeftToday === 0);
 
         const desc = max === null
           ? `מעל ${min} אזעקות${locSuffix} היום`
@@ -175,7 +179,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
           emoji: "📊",
           title: `${label}${locSuffix} היום`,
           description: desc,
-          multiplier: mult,
+          multiplier: resolved ? -1 : mult,
           scope, type, location,
         };
       });
