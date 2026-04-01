@@ -61,6 +61,8 @@ export function useAlerts() {
 
       const allAlerts: Alert[] = [];
       let todayCount = 0;
+      const todayCountByCity: Record<string, number> = {};
+      const todayCountByRegion: Record<string, number> = {};
 
       // Midnight of today (local time) as Unix timestamp seconds
       const now = new Date();
@@ -71,9 +73,17 @@ export function useAlerts() {
           if (group.alerts && Array.isArray(group.alerts)) {
             group.alerts.forEach((a: any, i: number) => {
               const alertTimeSec: number = a.time ?? 0;
+              const cities = Array.isArray(a.cities) ? a.cities : [a.cities || "אזור לא ידוע"];
               // Only count alert if it happened today (after local midnight)
               if (alertTimeSec >= todayMidnight) {
                 todayCount++;
+                for (const cityName of cities) {
+                  todayCountByCity[cityName] = (todayCountByCity[cityName] || 0) + 1;
+                  const region = cityToRegion[cityName];
+                  if (region) {
+                    todayCountByRegion[region] = (todayCountByRegion[region] || 0) + 1;
+                  }
+                }
               }
               allAlerts.push({
                 id: `hist-${group.id || 0}-${i}`,
