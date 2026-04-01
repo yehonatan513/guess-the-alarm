@@ -24,12 +24,15 @@ function probToMultiplier(prob: number, edge: number = 0.92, maxMult: number = 5
 // Maps a probability [0,1] onto [minMult, maxMult] using log scale.
 // High prob → close to minMult. Low prob → close to maxMult.
 function probToRange(prob: number, minMult: number, maxMult: number): number {
-  const p = Math.max(0.0001, Math.min(0.9999, prob));
-  const score = Math.log(1 / p) / Math.log(1 / 0.0001);
+  const p = Math.max(0.00001, Math.min(0.99999, prob));
+  const logP = Math.log(p);
+  const logMin = Math.log(0.00001);
+  const logMax = Math.log(0.99999);
+  const score = (logP - logMax) / (logMin - logMax);
   const clamped = Math.max(0, Math.min(1, score));
-  const logMin = Math.log(minMult);
-  const logMax = Math.log(maxMult);
-  const result = Math.exp(logMin + clamped * (logMax - logMin));
+  const logMinMult = Math.log(minMult);
+  const logMaxMult = Math.log(maxMult);
+  const result = Math.exp(logMinMult + clamped * (logMaxMult - logMinMult));
   return parseFloat(Math.max(minMult, Math.min(maxMult, result)).toFixed(2));
 }
 
