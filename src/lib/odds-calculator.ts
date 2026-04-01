@@ -111,7 +111,8 @@ export function calculateSmartOdds(params: SmartOddsParams): number {
         if (remainingNeeded < 0) return 1.01;
         probability = 1 - poissonCDF(lambdaRemaining, remainingNeeded);
       }
-      break;
+      probability = Math.max(0.001, Math.min(0.999, probability));
+      return probToMultiplier(probability, 0.92, 50);
     }
 
     case "total": {
@@ -121,28 +122,29 @@ export function calculateSmartOdds(params: SmartOddsParams): number {
       const remainingForMin = min - todayCount;
       const pMax = poissonCDF(lambdaRemaining, Math.max(0, remainingForMax));
       const pMin = poissonCDF(lambdaRemaining, Math.max(-1, remainingForMin - 1));
-      probability = Math.max(0.001, pMax - pMin);
-      break;
+      probability = Math.max(0.001, Math.min(0.999, Math.max(0.001, pMax - pMin)));
+      return probToMultiplier(probability, 0.90, 50);
     }
 
     case "quiet": {
       const durationDays = (params.minutes || 60) / 1440;
       const expectedInWindow = historicalDailyRate * durationDays;
       probability = poissonCDF(expectedInWindow, 0);
-      break;
+      const minutes = params.minutes || 60;
+      if (minutes <= 5)        return probToRange(probability, 1.05, 3.0);
+      else if (minutes <= 30)  return probToRange(probability, 2.0, 12.0);
+      else if (minutes <= 60)  return probToRange(probability, 5.0, 30.0);
+      else                     return probToRange(probability, 15.0, 80.0);
     }
 
     case "night": {
       const expectedInWindow = historicalDailyRate * (6 / 24);
       const probZero = poissonCDF(expectedInWindow, 0);
       probability = params.direction === "no" ? probZero : 1 - probZero;
-      break;
+      return probToRange(probability, 1.05, 15.0);
     }
 
     default:
       return defaultMultiplier;
   }
-
-  probability = Math.max(0.001, Math.min(0.999, probability));
-  return probToMultiplier(probability, edge, maxMult);
 }
