@@ -13,13 +13,24 @@ function poissonCDF(lambda: number, k: number): number {
   return Math.min(1, sum);
 }
 
-// Smooth multiplier curve — no hard cap jumps.
-function probToMultiplier(prob: number, edge: number, maxMult: number): number {
+// Smooth multiplier curve for overunder/total bets.
+function probToMultiplier(prob: number, edge: number = 0.92, maxMult: number = 50): number {
   const p = Math.max(0.001, Math.min(0.999, prob));
   const raw = (1 / p) * edge;
-  const curved = maxMult * (1 - Math.exp(-raw / maxMult));
-  const final = Math.max(1.01, Math.min(maxMult, curved));
-  return parseFloat(final.toFixed(2));
+  const softCapped = maxMult * (1 - Math.exp(-raw / maxMult));
+  return parseFloat(Math.max(1.01, softCapped).toFixed(2));
+}
+
+// Maps a probability [0,1] onto [minMult, maxMult] using log scale.
+// High prob → close to minMult. Low prob → close to maxMult.
+function probToRange(prob: number, minMult: number, maxMult: number): number {
+  const p = Math.max(0.0001, Math.min(0.9999, prob));
+  const score = Math.log(1 / p) / Math.log(1 / 0.0001);
+  const clamped = Math.max(0, Math.min(1, score));
+  const logMin = Math.log(minMult);
+  const logMax = Math.log(maxMult);
+  const result = Math.exp(logMin + clamped * (logMax - logMin));
+  return parseFloat(Math.max(minMult, Math.min(maxMult, result)).toFixed(2));
 }
 
 export interface SmartOddsParams {
