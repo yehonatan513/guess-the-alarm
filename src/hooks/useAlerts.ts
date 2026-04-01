@@ -21,10 +21,22 @@ interface AlertsState {
 const PROXY_URL = import.meta.env.VITE_PROXY_URL || "https://cvokdzmibrxadrpiczow.supabase.co/functions/v1/fetch-alerts";
 
 export function useAlerts() {
+  const cityToRegion = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const [region, cities] of Object.entries(REGION_CITIES)) {
+      for (const city of cities) {
+        map[city] = region;
+      }
+    }
+    return map;
+  }, []);
+
   const [state, setState] = useState<AlertsState>({
     alerts: [],
     activeAlerts: [],
     todayCount: 0,
+    todayCountByCity: {},
+    todayCountByRegion: {},
     error: null,
     lastUpdated: null,
   });
