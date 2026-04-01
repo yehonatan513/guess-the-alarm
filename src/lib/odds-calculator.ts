@@ -68,7 +68,10 @@ export function calculateSmartOdds(params: SmartOddsParams): number {
   }
 
   const now = Date.now();
-  const daysTracked = Math.max(1, (now - stats.tracking_started_at) / 86400000);
+  const trackingStartMs = stats.tracking_started_at > 1e12
+    ? stats.tracking_started_at
+    : stats.tracking_started_at * 1000;
+  const daysTracked = Math.max(1, (now - trackingStartMs) / 86400000);
   const sanitizedLocation = location.replace(/[.#$[\]]/g, "_");
 
   let count = 0;
