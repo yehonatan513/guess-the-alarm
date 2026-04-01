@@ -47,7 +47,7 @@ const Index = () => {
 
   const bets = useMemo(
     () => (selectedType && locationReady)
-      ? generateBets(scope, selectedType, location || "כללי", stats, todayCount, minutesLeftToday)
+      ? generateBets(scope, selectedType, location || "כללי", stats, todayCount, minutesLeftToday, todayCountByCity, todayCountByRegion)
       : [],
     [scope, selectedType, location, locationReady, stats, todayCount, minutesLeftToday]
   );

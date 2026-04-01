@@ -174,7 +174,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
 
         // Check if already resolved
         const effectiveMax = max !== null ? max : Infinity;
-        const resolved = todayCount > effectiveMax || (todayCount < min && minutesLeftToday === 0);
+        const resolved = locationTodayCount > effectiveMax || (locationTodayCount < min && minutesLeftToday === 0);
 
         const desc = max === null
           ? `מעל ${min - 1} אזעקות${locSuffix} היום`

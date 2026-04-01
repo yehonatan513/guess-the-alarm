@@ -97,9 +97,11 @@ export function useAlerts() {
       }
 
       setState({
-        alerts: allAlerts, // keep all — bet resolution needs the full history to settle old bets
+        alerts: allAlerts,
         activeAlerts,
         todayCount,
+        todayCountByCity,
+        todayCountByRegion,
         error: null,
         lastUpdated: new Date(),
       });
