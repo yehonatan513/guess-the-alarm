@@ -90,8 +90,8 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
         });
 
         // Check if already resolved
-        const underResolved = todayCount >= row.n; // can't go under anymore
-        const overResolved = todayCount > row.n;   // already passed threshold
+        const underResolved = locationTodayCount >= row.n;
+        const overResolved = locationTodayCount > row.n;
 
         bets.push({
           id: encodeId(scope, "overunder", location, "under", row.n),
