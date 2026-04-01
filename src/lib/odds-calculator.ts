@@ -109,13 +109,13 @@ export function calculateSmartOdds(params: SmartOddsParams): number {
       const remainingNeeded = threshold - todayCount;
       if (params.direction === "under") {
         if (remainingNeeded < 0) return 1.01;
-        probability = poissonCDF(lambdaRemaining, remainingNeeded);
+        const prob = poissonCDF(lambdaRemaining, remainingNeeded);
+        return probToRange(prob, 1.01, 20.0);
       } else {
         if (remainingNeeded < 0) return 1.01;
-        probability = 1 - poissonCDF(lambdaRemaining, remainingNeeded);
+        const prob = 1 - poissonCDF(lambdaRemaining, remainingNeeded);
+        return probToRange(prob, 1.05, 400.0);
       }
-      probability = Math.max(0.001, Math.min(0.999, probability));
-      return probToMultiplier(probability, 0.92, 50);
     }
 
     case "total": {
@@ -125,8 +125,8 @@ export function calculateSmartOdds(params: SmartOddsParams): number {
       const remainingForMin = min - todayCount;
       const pMax = poissonCDF(lambdaRemaining, Math.max(0, remainingForMax));
       const pMin = poissonCDF(lambdaRemaining, Math.max(-1, remainingForMin - 1));
-      probability = Math.max(0.001, Math.min(0.999, Math.max(0.001, pMax - pMin)));
-      return probToMultiplier(probability, 0.90, 50);
+      const prob = Math.max(0.0001, pMax - pMin);
+      return probToRange(prob, 1.05, 250.0);
     }
 
     case "quiet": {
