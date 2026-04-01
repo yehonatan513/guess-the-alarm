@@ -68,6 +68,13 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
   const locSuffix = loc ? ` ב${loc}` : "";
   const encodeId = (...parts: (string | number)[]) => parts.join("|");
 
+  const locationTodayCount =
+    scope === "general" || location === "כללי"
+      ? todayCount
+      : scope === "city"
+      ? (todayCountByCity[location] ?? 0)
+      : (todayCountByRegion[location] ?? 0);
+
   switch (type) {
     case "overunder": {
       const bets: GeneratedBet[] = [];
