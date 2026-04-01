@@ -63,7 +63,7 @@ const TOTAL_RANGES = [
 import { calculateSmartOdds } from "./odds-calculator";
 import { AlertStats } from "@/hooks/useAlertStats";
 
-export function generateBets(scope: BetScope, type: BetType, location: string, stats: AlertStats | null = null, todayCount: number = 0, minutesLeftToday: number = 1440): GeneratedBet[] {
+export function generateBets(scope: BetScope, type: BetType, location: string, stats: AlertStats | null = null, todayCount: number = 0, minutesLeftToday: number = 1440, todayCountByCity: Record<string, number> = {}, todayCountByRegion: Record<string, number> = {}): GeneratedBet[] {
   const loc = location === "כללי" ? "" : location;
   const locSuffix = loc ? ` ב${loc}` : "";
   const encodeId = (...parts: (string | number)[]) => parts.join("|");
