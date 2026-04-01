@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { REGION_CITIES } from "@/lib/cities-data";
 
 interface Alert {
   id: string;
@@ -11,6 +12,8 @@ interface AlertsState {
   alerts: Alert[];
   activeAlerts: Alert[];
   todayCount: number;
+  todayCountByCity: Record<string, number>;
+  todayCountByRegion: Record<string, number>;
   error: string | null;
   lastUpdated: Date | null;
 }
