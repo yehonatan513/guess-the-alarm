@@ -108,7 +108,7 @@ export function useAlerts() {
     } catch (err: any) {
       setState(prev => ({ ...prev, error: "לא ניתן לטעון אזעקות", lastUpdated: new Date() }));
     }
-  }, []);
+  }, [cityToRegion]);
 
   useEffect(() => {
     fetchData();
