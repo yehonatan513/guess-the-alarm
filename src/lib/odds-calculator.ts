@@ -24,12 +24,15 @@ function probToMultiplier(prob: number, edge: number = 0.92, maxMult: number = 5
 // Maps a probability [0,1] onto [minMult, maxMult] using log scale.
 // High prob → close to minMult. Low prob → close to maxMult.
 function probToRange(prob: number, minMult: number, maxMult: number): number {
-  const p = Math.max(0.0001, Math.min(0.9999, prob));
-  const score = Math.log(1 / p) / Math.log(1 / 0.0001);
+  const p = Math.max(0.00001, Math.min(0.99999, prob));
+  const logP = Math.log(p);
+  const logMin = Math.log(0.00001);
+  const logMax = Math.log(0.99999);
+  const score = (logP - logMax) / (logMin - logMax);
   const clamped = Math.max(0, Math.min(1, score));
-  const logMin = Math.log(minMult);
-  const logMax = Math.log(maxMult);
-  const result = Math.exp(logMin + clamped * (logMax - logMin));
+  const logMinMult = Math.log(minMult);
+  const logMaxMult = Math.log(maxMult);
+  const result = Math.exp(logMinMult + clamped * (logMaxMult - logMinMult));
   return parseFloat(Math.max(minMult, Math.min(maxMult, result)).toFixed(2));
 }
 
@@ -106,13 +109,13 @@ export function calculateSmartOdds(params: SmartOddsParams): number {
       const remainingNeeded = threshold - todayCount;
       if (params.direction === "under") {
         if (remainingNeeded < 0) return 1.01;
-        probability = poissonCDF(lambdaRemaining, remainingNeeded);
+        const prob = poissonCDF(lambdaRemaining, remainingNeeded);
+        return probToRange(prob, 1.01, 20.0);
       } else {
         if (remainingNeeded < 0) return 1.01;
-        probability = 1 - poissonCDF(lambdaRemaining, remainingNeeded);
+        const prob = 1 - poissonCDF(lambdaRemaining, remainingNeeded);
+        return probToRange(prob, 1.05, 400.0);
       }
-      probability = Math.max(0.001, Math.min(0.999, probability));
-      return probToMultiplier(probability, 0.92, 50);
     }
 
     case "total": {
@@ -122,8 +125,8 @@ export function calculateSmartOdds(params: SmartOddsParams): number {
       const remainingForMin = min - todayCount;
       const pMax = poissonCDF(lambdaRemaining, Math.max(0, remainingForMax));
       const pMin = poissonCDF(lambdaRemaining, Math.max(-1, remainingForMin - 1));
-      probability = Math.max(0.001, Math.min(0.999, Math.max(0.001, pMax - pMin)));
-      return probToMultiplier(probability, 0.90, 50);
+      const prob = Math.max(0.0001, pMax - pMin);
+      return probToRange(prob, 1.05, 250.0);
     }
 
     case "quiet": {
