@@ -63,10 +63,17 @@ const TOTAL_RANGES = [
 import { calculateSmartOdds } from "./odds-calculator";
 import { AlertStats } from "@/hooks/useAlertStats";
 
-export function generateBets(scope: BetScope, type: BetType, location: string, stats: AlertStats | null = null, todayCount: number = 0, minutesLeftToday: number = 1440): GeneratedBet[] {
+export function generateBets(scope: BetScope, type: BetType, location: string, stats: AlertStats | null = null, todayCount: number = 0, minutesLeftToday: number = 1440, todayCountByCity: Record<string, number> = {}, todayCountByRegion: Record<string, number> = {}): GeneratedBet[] {
   const loc = location === "כללי" ? "" : location;
   const locSuffix = loc ? ` ב${loc}` : "";
   const encodeId = (...parts: (string | number)[]) => parts.join("|");
+
+  const locationTodayCount =
+    scope === "general" || location === "כללי"
+      ? todayCount
+      : scope === "city"
+      ? (todayCountByCity[location] ?? 0)
+      : (todayCountByRegion[location] ?? 0);
 
   switch (type) {
     case "overunder": {
@@ -83,8 +90,8 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
         });
 
         // Check if already resolved
-        const underResolved = todayCount >= row.n; // can't go under anymore
-        const overResolved = todayCount > row.n;   // already passed threshold
+        const underResolved = locationTodayCount >= row.n;
+        const overResolved = locationTodayCount > row.n;
 
         bets.push({
           id: encodeId(scope, "overunder", location, "under", row.n),
@@ -167,7 +174,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
 
         // Check if already resolved
         const effectiveMax = max !== null ? max : Infinity;
-        const resolved = todayCount > effectiveMax || (todayCount < min && minutesLeftToday === 0);
+        const resolved = locationTodayCount > effectiveMax || (locationTodayCount < min && minutesLeftToday === 0);
 
         const desc = max === null
           ? `מעל ${min - 1} אזעקות${locSuffix} היום`

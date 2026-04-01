@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { REGION_CITIES } from "@/lib/cities-data";
 
 interface Alert {
   id: string;
@@ -11,6 +12,8 @@ interface AlertsState {
   alerts: Alert[];
   activeAlerts: Alert[];
   todayCount: number;
+  todayCountByCity: Record<string, number>;
+  todayCountByRegion: Record<string, number>;
   error: string | null;
   lastUpdated: Date | null;
 }
@@ -18,10 +21,22 @@ interface AlertsState {
 const PROXY_URL = import.meta.env.VITE_PROXY_URL || "https://cvokdzmibrxadrpiczow.supabase.co/functions/v1/fetch-alerts";
 
 export function useAlerts() {
+  const cityToRegion = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const [region, cities] of Object.entries(REGION_CITIES)) {
+      for (const city of cities) {
+        map[city] = region;
+      }
+    }
+    return map;
+  }, []);
+
   const [state, setState] = useState<AlertsState>({
     alerts: [],
     activeAlerts: [],
     todayCount: 0,
+    todayCountByCity: {},
+    todayCountByRegion: {},
     error: null,
     lastUpdated: null,
   });
@@ -46,6 +61,8 @@ export function useAlerts() {
 
       const allAlerts: Alert[] = [];
       let todayCount = 0;
+      const todayCountByCity: Record<string, number> = {};
+      const todayCountByRegion: Record<string, number> = {};
 
       // Midnight of today (local time) as Unix timestamp seconds
       const now = new Date();
@@ -56,9 +73,17 @@ export function useAlerts() {
           if (group.alerts && Array.isArray(group.alerts)) {
             group.alerts.forEach((a: any, i: number) => {
               const alertTimeSec: number = a.time ?? 0;
+              const cities = Array.isArray(a.cities) ? a.cities : [a.cities || "אזור לא ידוע"];
               // Only count alert if it happened today (after local midnight)
               if (alertTimeSec >= todayMidnight) {
                 todayCount++;
+                for (const cityName of cities) {
+                  todayCountByCity[cityName] = (todayCountByCity[cityName] || 0) + 1;
+                  const region = cityToRegion[cityName];
+                  if (region) {
+                    todayCountByRegion[region] = (todayCountByRegion[region] || 0) + 1;
+                  }
+                }
               }
               allAlerts.push({
                 id: `hist-${group.id || 0}-${i}`,
@@ -72,16 +97,18 @@ export function useAlerts() {
       }
 
       setState({
-        alerts: allAlerts, // keep all — bet resolution needs the full history to settle old bets
+        alerts: allAlerts,
         activeAlerts,
         todayCount,
+        todayCountByCity,
+        todayCountByRegion,
         error: null,
         lastUpdated: new Date(),
       });
     } catch (err: any) {
       setState(prev => ({ ...prev, error: "לא ניתן לטעון אזעקות", lastUpdated: new Date() }));
     }
-  }, []);
+  }, [cityToRegion]);
 
   useEffect(() => {
     fetchData();

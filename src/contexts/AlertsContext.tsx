@@ -12,6 +12,8 @@ interface AlertsContextType {
   alerts: Alert[];
   activeAlerts: Alert[];
   todayCount: number;
+  todayCountByCity: Record<string, number>;
+  todayCountByRegion: Record<string, number>;
   error: string | null;
   lastUpdated: Date | null;
 }
@@ -20,6 +22,8 @@ const AlertsContext = createContext<AlertsContextType>({
   alerts: [],
   activeAlerts: [],
   todayCount: 0,
+  todayCountByCity: {},
+  todayCountByRegion: {},
   error: null,
   lastUpdated: null,
 });

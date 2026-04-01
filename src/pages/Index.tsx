@@ -21,7 +21,7 @@ const SCOPE_TABS: { id: BetScope; label: string; icon: string }[] = [
 const Index = () => {
   const { profile } = useAuth();
   const { theme } = useTheme();
-  const { alerts, activeAlerts, todayCount, error } = useAlertsContext();
+  const { alerts, activeAlerts, todayCount, todayCountByCity, todayCountByRegion, error } = useAlertsContext();
   const { stats } = useAlertStats();
 
   // Bet builder state
@@ -47,7 +47,7 @@ const Index = () => {
 
   const bets = useMemo(
     () => (selectedType && locationReady)
-      ? generateBets(scope, selectedType, location || "כללי", stats, todayCount, minutesLeftToday)
+      ? generateBets(scope, selectedType, location || "כללי", stats, todayCount, minutesLeftToday, todayCountByCity, todayCountByRegion)
       : [],
     [scope, selectedType, location, locationReady, stats, todayCount, minutesLeftToday]
   );
