@@ -11,6 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { query, orderByChild, equalTo, get } from "firebase/database";
+import { Badge } from "@/components/ui/badge";
 
 // Accept any bet shape that has these 5 fields (works for both BetTemplate and GeneratedBet)
 interface BetBase {
@@ -19,6 +21,8 @@ interface BetBase {
   title: string;
   description: string;
   multiplier: number;
+  riskLevel?: "נמוך" | "בינוני" | "גבוה";
+  oddsExplanation?: string;
 }
 
 interface Props {
@@ -35,13 +39,15 @@ const formatNum = (n: number) => n.toLocaleString("he-IL");
 const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
   const { user, profile, updateCoins } = useAuth();
   const [amount, setAmount] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!bet) return null;
 
   const potential = Math.floor(amount * bet.multiplier);
-  const canBet = amount > 0 && profile && amount <= profile.coins;
+  const canBet = amount > 0 && profile && !isSubmitting;
 
   const handleBet = async () => {
+    if (isSubmitting) return;
     if (!user || !profile || !canBet) return;
 
     // Validate amount
@@ -49,8 +55,38 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
       toast.error("סכום הימור לא תקין");
       return;
     }
+    
+    if (amount > profile.coins) {
+      toast.error("אין לך מספיק מטבעות להימור זה");
+      return;
+    }
 
+    // Duplicate check: Same user, same bet id, placed in last 60 minutes
     try {
+      setIsSubmitting(true);
+      const recentQuery = query(ref(db, "bets"), orderByChild("uid"), equalTo(user.uid));
+      const snap = await get(recentQuery);
+      if (snap.exists()) {
+        const bets = snap.val();
+        const oneHourAgo = Date.now() - 60 * 60 * 1000;
+        const isDuplicate = Object.values(bets).some((b: any) => 
+          b.type === bet.id && 
+          b.status === "open" && 
+          new Date(b.created_at).getTime() > oneHourAgo
+        );
+        if (isDuplicate) {
+          toast.error("כבר הצבת הימור זהה בשעה האחרונה");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Duplicate check failed, proceeding anyway", e);
+    }
+
+    setIsSubmitting(true);
+    try {
+      // 1. Push bet to DB first
       await push(ref(db, "bets"), {
         uid: user.uid,
         username: profile.username,
@@ -64,13 +100,18 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
         created_at: new Date().toISOString(),
         resolved_at: null,
       });
+
+      // 2. Only then deduct coins
       await updateCoins(profile.coins - amount);
+      
       toast.success("ההימור נרשם! 🎰", { description: `${formatNum(amount)} מטבעות על ${bet.title}` });
       setAmount(0);
       onClose();
     } catch (error) {
       console.error("Failed to place bet:", error);
       toast.error("שגיאה בעת הצבת הימור");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -84,6 +125,16 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
           </DialogTitle>
         </DialogHeader>
         <p className="text-muted-foreground text-sm text-right">{bet.description}</p>
+        
+        {bet.riskLevel && (
+          <div className="flex justify-between items-center bg-secondary/30 p-2 rounded-lg text-xs">
+            <Badge variant={bet.riskLevel === "גבוה" ? "destructive" : "secondary"} className="font-bold">
+              סיכון {bet.riskLevel}
+            </Badge>
+            <span className="text-muted-foreground">{bet.oddsExplanation}</span>
+          </div>
+        )}
+
         <div className="text-primary font-black text-2xl text-center">x{bet.multiplier}</div>
 
         <div className="space-y-3">

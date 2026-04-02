@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/App";
 import { useAlertsContext } from "@/contexts/AlertsContext";
@@ -31,26 +31,50 @@ const Index = () => {
   const [selectedType, setSelectedType] = useState<BetType | null>(null);
   const [selectedBet, setSelectedBet] = useState<GeneratedBet | null>(null);
 
+  const [minutesLeftToday, setMinutesLeftToday] = useState(0);
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+      setMinutesLeftToday(Math.max(0, Math.floor((endOfDay.getTime() - now.getTime()) / 60000)));
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   const filteredCities = useMemo(
-    () => CITIES.filter(c => c.includes(citySearch)),
+    () => CITIES.filter(c => c.toLowerCase().includes(citySearch.toLowerCase())),
     [citySearch]
   );
 
-  const locationReady = scope === "general" || (!!location && location !== "כללי");
+  const locationReady = useMemo(() => {
+    if (scope === "general") return true;
+    if (!location || location === "כללי") return false;
+    if (scope === "city") return CITIES.includes(location);
+    if (scope === "region") return REGIONS.includes(location);
+    return false;
+  }, [scope, location]);
 
-  const minutesLeftToday = useMemo(() => {
-    const now = new Date();
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
-    return Math.max(0, Math.floor((endOfDay.getTime() - now.getTime()) / 60000));
-  }, []);
-
-  const bets = useMemo(
-    () => (selectedType && locationReady)
-      ? generateBets(scope, selectedType, location || "כללי", stats, todayCount, minutesLeftToday, todayCountByCity, todayCountByRegion)
-      : [],
-    [scope, selectedType, location, locationReady, stats, todayCount, minutesLeftToday, todayCountByCity, todayCountByRegion]
-  );
+  const bets = useMemo(() => {
+    if (!selectedType || !locationReady) return [];
+    const generated = generateBets(
+      scope,
+      selectedType,
+      location || "כללי",
+      stats,
+      todayCount,
+      minutesLeftToday,
+      todayCountByCity,
+      todayCountByRegion,
+      profile?.consecutive_wins || 0
+    );
+    // Filter out bets that are already resolved/locked to reduce clutter
+    return generated.filter(bet => bet.multiplier !== -1);
+  }, [scope, selectedType, location, locationReady, stats, todayCount, minutesLeftToday, todayCountByCity, todayCountByRegion, profile?.consecutive_wins]);
 
   const handleScopeChange = (s: BetScope) => {
     setScope(s);
@@ -109,7 +133,14 @@ const Index = () => {
         {/* ── Bet Builder ── */}
         <div className="space-y-5 animate-slideInUp" style={{ animationDelay: "120ms" }}>
           <div className="flex items-center justify-between">
-            <h2 className="text-foreground font-bold text-sm">🎰 בנה הימור</h2>
+            <div className="flex flex-col">
+              <h2 className="text-foreground font-bold text-sm">🎰 בנה הימור</h2>
+              {minutesLeftToday > 0 && (
+                <p className="text-[10px] text-muted-foreground font-mono">
+                  ⏱️ {Math.floor(minutesLeftToday / 60)}h {minutesLeftToday % 60}m נותרו היום
+                </p>
+              )}
+            </div>
             {stats && stats.total_alerts >= 300 ? (
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 text-green-500 rounded-full border border-green-500/20 text-xs font-bold animate-pulse">
                 <span className="relative flex h-2 w-2">

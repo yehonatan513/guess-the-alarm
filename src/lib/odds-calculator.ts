@@ -13,9 +13,9 @@ function poissonCDF(lambda: number, k: number): number {
 }
 
 // Maps probability to multiplier within [minMult, maxMult].
-// Uses log scale so small differences in extreme probabilities
-// still produce meaningfully different multipliers.
-function probToRange(prob: number, minMult: number, maxMult: number): number {
+const HOUSE_EDGE = 0.05; // 5%
+
+function probToRange(prob: number, minMult: number, maxMult: number, streakPenalty: number = 1.0): number {
   const p = Math.max(0.00001, Math.min(0.99999, prob));
   // score: 0 = certain (prob near 1), 1 = impossible (prob near 0)
   const score = Math.log(1 / p) / Math.log(1 / 0.00001);
@@ -23,7 +23,11 @@ function probToRange(prob: number, minMult: number, maxMult: number): number {
   const result = Math.exp(
     Math.log(minMult) + clamped * (Math.log(maxMult) - Math.log(minMult))
   );
-  return parseFloat(Math.max(minMult, Math.min(maxMult, result)).toFixed(2));
+  
+  // Apply house edge and streak penalty
+  const final = result * (1 - HOUSE_EDGE) * streakPenalty;
+  
+  return parseFloat(Math.max(minMult, Math.min(maxMult, final)).toFixed(2));
 }
 
 export interface SmartOddsParams {
@@ -41,6 +45,7 @@ export interface SmartOddsParams {
   max?: number | null;
   // Location-specific today counts (passed from bet-generator)
   locationTodayCount?: number;
+  streakPenalty?: number;
 }
 
 const MIN_ALERTS_FOR_SMART_ODDS = 30; // lowered: we have per-location counts now
@@ -51,6 +56,7 @@ export function calculateSmartOdds(params: SmartOddsParams): number {
     todayCount = 0,
     minutesLeftToday = 1440,
     locationTodayCount,
+    streakPenalty = 1.0,
   } = params;
 
   // Use location-specific count if provided, otherwise fall back to global
@@ -83,6 +89,9 @@ export function calculateSmartOdds(params: SmartOddsParams): number {
   const fractionLeft = Math.max(0.001, minutesLeftToday) / 1440;
   const lambdaRemaining = historicalDailyRate * fractionLeft;
 
+  // Probability scaling factor based on scope
+  const scopeScale = scope === "general" ? 1.0 : scope === "region" ? 0.85 : 0.7;
+
   switch (type) {
 
     case "overunder": {
@@ -90,16 +99,14 @@ export function calculateSmartOdds(params: SmartOddsParams): number {
       const remainingNeeded = threshold - localCount;
 
       if (params.direction === "under") {
-        // Already exceeded threshold → impossible to win
         if (remainingNeeded < 0) return 1.01;
         const prob = poissonCDF(lambdaRemaining, remainingNeeded);
-        return probToRange(prob, 1.01, 25.0);
+        return probToRange(prob, 1.01, 25.0 * scopeScale, streakPenalty);
 
       } else { // "over"
-        // Already exceeded threshold → guaranteed win → not useful
         if (remainingNeeded <= 0) return 1.01;
         const prob = 1 - poissonCDF(lambdaRemaining, remainingNeeded - 1);
-        return probToRange(prob, 1.05, 500.0);
+        return probToRange(prob, 1.05, 500.0 * scopeScale, streakPenalty);
       }
     }
 
@@ -111,23 +118,23 @@ export function calculateSmartOdds(params: SmartOddsParams): number {
       const pMax = poissonCDF(lambdaRemaining, Math.max(0, remainingForMax));
       const pMin = poissonCDF(lambdaRemaining, Math.max(-1, remainingForMin - 1));
       const prob = Math.max(0.00001, pMax - pMin);
-      return probToRange(prob, 1.05, 300.0);
+      return probToRange(prob, 1.05, 300.0 * scopeScale, streakPenalty);
     }
 
     case "quiet": {
       const durationDays = (params.minutes || 60) / 1440;
       const prob = poissonCDF(historicalDailyRate * durationDays, 0);
       const minutes = params.minutes || 60;
-      if (minutes <= 5)       return probToRange(prob, 1.05, 3.0);
-      else if (minutes <= 30) return probToRange(prob, 2.0,  12.0);
-      else if (minutes <= 60) return probToRange(prob, 5.0,  30.0);
-      else                    return probToRange(prob, 15.0, 80.0);
+      if (minutes <= 5)       return probToRange(prob, 1.05, 3.0 * scopeScale, streakPenalty);
+      else if (minutes <= 30) return probToRange(prob, 2.0,  12.0 * scopeScale, streakPenalty);
+      else if (minutes <= 60) return probToRange(prob, 5.0,  30.0 * scopeScale, streakPenalty);
+      else                    return probToRange(prob, 15.0, 80.0 * scopeScale, streakPenalty);
     }
 
     case "night": {
       const prob0 = poissonCDF(historicalDailyRate * (6 / 24), 0);
       const prob = params.direction === "no" ? prob0 : 1 - prob0;
-      return probToRange(prob, 1.05, 15.0);
+      return probToRange(prob, 1.05, 15.0 * scopeScale, streakPenalty);
     }
 
     default:

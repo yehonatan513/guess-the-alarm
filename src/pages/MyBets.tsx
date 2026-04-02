@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { ref, query, orderByChild, equalTo, onValue } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -72,10 +72,11 @@ const MyBets = () => {
       }
     });
     return () => unsub();
-  }, [user]);
+  }, [user?.uid]);
 
-  const filtered = bets.filter((b) =>
-    tab === "open" ? b.status === "open" : b.status !== "open"
+  const filtered = useMemo(() => 
+    bets.filter((b) => tab === "open" ? b.status === "open" : b.status !== "open"),
+    [bets, tab]
   );
 
   return (

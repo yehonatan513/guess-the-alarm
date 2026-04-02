@@ -41,12 +41,15 @@ export function useAlerts() {
     lastUpdated: null,
   });
 
+  const [retryDelay, setRetryDelay] = useState(10000);
+
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch(PROXY_URL);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-
+      
+      // ... same processing logic ...
       const activeAlerts: Alert[] = [];
       if (data.active && Array.isArray(data.active) && data.active.length > 0) {
         data.active.forEach((a: any, i: number) => {
@@ -64,7 +67,6 @@ export function useAlerts() {
       const todayCountByCity: Record<string, number> = {};
       const todayCountByRegion: Record<string, number> = {};
 
-      // Midnight of today (local time) as Unix timestamp seconds
       const now = new Date();
       const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
 
@@ -74,10 +76,8 @@ export function useAlerts() {
             group.alerts.forEach((a: any, i: number) => {
               const alertTimeSec: number = a.time ?? 0;
               const cities = Array.isArray(a.cities) ? a.cities : [a.cities || "אזור לא ידוע"];
-              // Only count alert if it happened today (after local midnight)
               if (alertTimeSec >= todayMidnight) {
                 todayCount += cities.length;
-                const regionsHitThisAlert = new Set<string>();
                 for (const cityName of cities) {
                   todayCountByCity[cityName] = (todayCountByCity[cityName] || 0) + 1;
                   const region = cityToRegion[cityName];
@@ -106,16 +106,19 @@ export function useAlerts() {
         error: null,
         lastUpdated: new Date(),
       });
+      setRetryDelay(10000); // Reset on success
     } catch (err: any) {
+      console.error("Fetch error:", err);
       setState(prev => ({ ...prev, error: "לא ניתן לטעון אזעקות", lastUpdated: new Date() }));
+      setRetryDelay(prev => Math.min(prev * 2, 60000)); // Exponential backoff up to 1m
     }
   }, [cityToRegion]);
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+    const timer = setInterval(fetchData, retryDelay);
+    return () => clearInterval(timer);
+  }, [fetchData, retryDelay]);
 
   return state;
 }

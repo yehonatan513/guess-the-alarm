@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ref, get, update, runTransaction, query, orderByChild, equalTo } from "firebase/database";
+import { ref, get, update, runTransaction, query, orderByChild, equalTo, push } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -36,8 +36,10 @@ function computeResult(
   bet: FirebaseBet,
   betId: string,
   alerts: Alert[],
+  activeAlerts: Alert[],
   todayCount: number,
-  now: Date
+  now: Date,
+  minutesLeftToday: number
 ): "win" | "loss" | null {
   const betCreatedMs = new Date(bet.created_at).getTime();
   const endTime = getBetEndTime(bet.type, betCreatedMs);
@@ -45,10 +47,19 @@ function computeResult(
 
   const hasAlertInWindow = (startMs: number, endMs: number, condition?: (a: Alert) => boolean) =>
     alerts.some((a) => {
-      const t = new Date(a.time).getTime();
-      if (t <= startMs || t >= endMs) return false;
-      if (condition && !condition(a)) return false;
-      return true;
+      try {
+        const t = new Date(a.time).getTime();
+        if (isNaN(t)) {
+          console.warn("Invalid alert time:", a.time);
+          return false;
+        }
+        if (t < startMs || t > endMs) return false;
+        if (condition && !condition(a)) return false;
+        return true;
+      } catch (e) {
+        console.error("Error parsing alert time:", e);
+        return false;
+      }
     });
 
   switch (bet.type) {
@@ -130,6 +141,16 @@ function computeResult(
             }
 
             case "quiet": {
+              // High activity check: if > 5 alerts in the first 30 mins, it's a loss
+              const first30Min = alerts.filter(a => {
+                const t = new Date(a.time).getTime();
+                return t >= betCreatedMs && t <= betCreatedMs + (30 * 60 * 1000) && matchAlert(a.areas);
+              }).length;
+              if (first30Min > 5) return "loss";
+
+              const hasActiveAlert = activeAlerts.some((a) => matchAlert(a.areas));
+              if (hasActiveAlert) return "loss";
+
               const hasAlert = hasAlertInWindow(betCreatedMs, endTime, (a) => matchAlert(a.areas));
               if (hasAlert) return "loss";
               if (isExpired) return "win";
@@ -153,11 +174,19 @@ function computeResult(
             case "total": {
               const count = countInLocation();
               const { min, max } = parsed;
-              if (max !== null && count > max) return "loss";
-              if (isExpired) {
-                return count >= min! && (max === null || count <= max) ? "win" : "loss";
-              }
-              return null;
+              const effectiveMax = max !== null ? max : Infinity;
+
+              // Check if already exceeded range
+              if (count > effectiveMax) return "loss";
+              
+              // If time is up and still below min
+              if (isExpired && count < min!) return "loss";
+              
+              // If still have time and within range, wait
+              if (!isExpired) return null;
+              
+              // Time is up and in range
+              return (count >= min! && count <= effectiveMax) ? "win" : "loss";
             }
           }
         }
@@ -199,6 +228,10 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
 
       const bets = snap.val() as Record<string, FirebaseBet>;
       const now = new Date();
+      const endOfDay = new Date(now);
+      endOfDay.setHours(23, 59, 59, 999);
+      const minutesLeftToday = Math.max(0, Math.floor((endOfDay.getTime() - now.getTime()) / 60000));
+
       const updates: Record<string, any> = {};
       let coinsToAdd = 0;
       let wins = 0;
@@ -207,10 +240,10 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
       for (const [betId, bet] of Object.entries(bets)) {
         if (bet.status !== "open") continue;
 
-        const result = computeResult(bet, betId, currentAlerts, currentTodayCount, now);
+        const result = computeResult(bet, betId, currentAlerts, activeAlerts, currentTodayCount, now, minutesLeftToday);
 
         if (result) {
-          const winnings = result === "win" ? Math.floor(bet.amount * bet.multiplier) : 0;
+          const winnings = result === "win" ? Math.round(bet.amount * bet.multiplier) : 0;
           updates[`bets/${betId}/status`] = result === "win" ? "won" : "lost";
           updates[`bets/${betId}/resolved_at`] = now.toISOString();
           updates[`bets/${betId}/coins_won`] = winnings;
@@ -224,32 +257,49 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
       }
 
       if (Object.keys(updates).length > 0) {
+        // ── Point 2: Aggregated Resolution ──
         await update(ref(db), updates);
 
-        // ── Fix #4: Use runTransaction to prevent race conditions on coins ──
-        if (coinsToAdd > 0) {
-          await runTransaction(ref(db, `users/${user.uid}/coins`), (current) => {
-            return (current || 0) + coinsToAdd;
-          });
-          // Also update leaderboard — read the new total
-          const newCoinsSnap = await get(ref(db, `users/${user.uid}/coins`));
-          const newCoins = newCoinsSnap.val() as number;
-          await update(ref(db, `leaderboard/${user.uid}`), { coins: newCoins });
+        // ── Point 3: Streak Tracking ──
+        // Logic: Any win in this batch increases streak. Any loss resets it.
+        // If both? Loss is more significant for gambling balance (reset it).
+        let newStreak = currentProfile.consecutive_wins || 0;
+        if (losses > 0) {
+          newStreak = 0;
+        } else if (wins > 0) {
+          newStreak += wins;
+        }
 
-          // Update local profile state to reflect new coins
+        // ── Apply coin changes and streak in one go ──
+        const finalCoinUpdates: Record<string, any> = {};
+        if (coinsToAdd > 0) {
+          await runTransaction(ref(db, `users/${user.uid}/coins`), (current) => (current || 0) + coinsToAdd);
+          const newSnap = await get(ref(db, `users/${user.uid}/coins`));
+          const newCoins = newSnap.val() as number;
+          finalCoinUpdates[`leaderboard/${user.uid}/coins`] = newCoins;
           await updateCoins(newCoins);
         }
+        
+        finalCoinUpdates[`users/${user.uid}/wins`] = (currentProfile.wins || 0) + wins;
+        finalCoinUpdates[`users/${user.uid}/losses`] = (currentProfile.losses || 0) + losses;
+        finalCoinUpdates[`users/${user.uid}/consecutive_wins`] = newStreak;
+        finalCoinUpdates[`leaderboard/${user.uid}/consecutive_wins`] = newStreak;
+        
+        await update(ref(db), finalCoinUpdates);
 
-        if (wins > 0 || losses > 0) {
-          await update(ref(db, `users/${user.uid}`), {
-            wins: (currentProfile.wins || 0) + wins,
-            losses: (currentProfile.losses || 0) + losses,
-          });
-        }
+        // ── Resolution History (Point 2 formalization) ──
+        await push(ref(db, `resolutions/${user.uid}`), {
+          at: now.toISOString(),
+          added_coins: coinsToAdd,
+          wins,
+          losses,
+          new_streak: newStreak,
+          bet_ids: Object.keys(updates).map(k => k.split("/")[1])
+        });
 
         if (wins > 0) {
           toast.success(`🎉 ניצחת ${wins} הימור${wins > 1 ? "ים" : ""}!`, {
-            description: `+${coinsToAdd.toLocaleString("he-IL")} מטבעות`,
+            description: `+${coinsToAdd.toLocaleString("he-IL")} מטבעות | רצף: ${newStreak} 🔥`,
           });
         }
         if (losses > 0) {

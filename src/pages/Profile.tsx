@@ -51,7 +51,7 @@ const Profile = () => {
     setLoadingLeaders(true);
     try {
       // Primary: leaderboard node (populated on login + coin update)
-      const snap = await get(query(ref(db, "leaderboard"), orderByChild("coins"), limitToLast(50)));
+      const snap = await get(ref(db, "leaderboard"));
       if (snap.exists()) {
         const data = snap.val();
         const arr = Object.entries(data)
@@ -59,7 +59,8 @@ const Profile = () => {
             const leaderData = v as LeaderboardData;
             return { uid, ...leaderData };
           })
-          .sort((a, b) => b.coins - a.coins);
+          .sort((a, b) => b.coins - a.coins)
+          .slice(0, 50);
         setLeaders(arr);
       } else {
         // Fallback: read directly from users node
@@ -158,6 +159,11 @@ const Profile = () => {
               <div>
                 <p className="text-destructive font-bold">{profile.losses}</p>
                 <p className="text-muted-foreground text-xs">הפסדים</p>
+              </div>
+              <div className="border-r border-border h-8 mx-1" />
+              <div>
+                <p className="text-orange-500 font-black">{profile.consecutive_wins || 0} 🔥</p>
+                <p className="text-muted-foreground text-xs">רצף</p>
               </div>
             </div>
             <button onClick={logout} className="text-xs text-muted-foreground underline mt-2">

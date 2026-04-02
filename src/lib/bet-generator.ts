@@ -19,15 +19,52 @@ export interface GeneratedBet {
   scope: BetScope;
   type: BetType;
   location: string; // "כללי" for general scope
+  riskLevel?: "נמוך" | "בינוני" | "גבוה";
+  oddsExplanation?: string;
 }
+
+export const BET_TIMING = {
+  DAY_START_HOUR: 6,
+  DAY_END_HOUR: 23,
+  NIGHT_START_HOUR: 23,
+  NIGHT_END_HOUR: 6,
+} as const;
 
 // ── Type group metadata (for the 4 squares UI) ───────────────────────────────
 
 export const BET_TYPE_GROUPS = [
-  { id: "overunder" as BetType, emoji: "📈", title: "אובר/אנדר", desc: "מעל/מתחת לכמות מסוימת" },
-  { id: "total"     as BetType, emoji: "📊", title: "כמה סה\"כ",  desc: "כמה אזעקות יהיו סה\"כ?" },
-  { id: "quiet"     as BetType, emoji: "🕊️", title: "תקופת שקט",  desc: "כמה זמן עד האזעקה הבאה?" },
-  { id: "night"     as BetType, emoji: "🌙", title: "אזעקת לילה", desc: "האם תהיה אזעקה הלילה?" },
+  { 
+    id: "overunder" as BetType, 
+    emoji: "📈", 
+    title: "אובר/אנדר", 
+    desc: "מעל/מתחת לכמות מסוימת",
+    risk: "בינוני" as const,
+    explanation: "יחסים מאוזנים (בדרך כלל 1.5x-3.0x)"
+  },
+  { 
+    id: "total" as BetType, 
+    emoji: "📊", 
+    title: "כמה סה\"כ", 
+    desc: "כמה אזעקות יהיו סה\"כ?",
+    risk: "בינוני" as const,
+    explanation: "טווחים רחבים יותר מפחיתים סיכון"
+  },
+  { 
+    id: "quiet" as BetType, 
+    emoji: "🕊️", 
+    title: "תקופת שקט", 
+    desc: "לא תהיה אזעקה במשך זמן מה",
+    risk: "גבוה" as const,
+    explanation: "תלוי מאוד בפעילות העכשווית"
+  },
+  { 
+    id: "night" as BetType, 
+    emoji: "🌙", 
+    title: "אזעקת לילה", 
+    desc: "האם תהיה אזעקה הלילה?",
+    risk: "נמוך" as const,
+    explanation: "הימור לטווח ארוך (00:00-06:00)"
+  },
 ];
 
 // ── Multiplier tables ─────────────────────────────────────────────────────────
@@ -63,7 +100,19 @@ const TOTAL_RANGES = [
 import { calculateSmartOdds } from "./odds-calculator";
 import { AlertStats } from "@/hooks/useAlertStats";
 
-export function generateBets(scope: BetScope, type: BetType, location: string, stats: AlertStats | null = null, todayCount: number = 0, minutesLeftToday: number = 1440, todayCountByCity: Record<string, number> = {}, todayCountByRegion: Record<string, number> = {}): GeneratedBet[] {
+export function generateBets(
+  scope: BetScope, 
+  type: BetType, 
+  location: string, 
+  stats: AlertStats | null = null, 
+  todayCount: number = 0, 
+  minutesLeftToday: number = 1440, 
+  todayCountByCity: Record<string, number> = {}, 
+  todayCountByRegion: Record<string, number> = {},
+  consecutiveWins: number = 0
+): GeneratedBet[] {
+  // Streak penalty: 5% per win, max 25% (0.75x)
+  const streakPenalty = Math.max(0.75, 1.0 - (consecutiveWins * 0.05));
   const loc = location === "כללי" ? "" : location;
   const locSuffix = loc ? ` ב${loc}` : "";
   const encodeId = (...parts: (string | number)[]) => parts.join("|");
@@ -84,11 +133,13 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
         const overMultDefault  = scope === "city" ? row.oc : scope === "region" ? row.or : row.og;
         
         const underMult = calculateSmartOdds({
-          stats, scope, location, type: "overunder", defaultMultiplier: underMultDefault, direction: "under", threshold: row.n, todayCount, minutesLeftToday, locationTodayCount
+          stats, scope, location, type: "overunder", defaultMultiplier: underMultDefault, direction: "under", threshold: row.n, todayCount, minutesLeftToday, locationTodayCount, streakPenalty
         });
         const overMult = calculateSmartOdds({
-          stats, scope, location, type: "overunder", defaultMultiplier: overMultDefault, direction: "over", threshold: row.n, todayCount, minutesLeftToday, locationTodayCount
+          stats, scope, location, type: "overunder", defaultMultiplier: overMultDefault, direction: "over", threshold: row.n, todayCount, minutesLeftToday, locationTodayCount, streakPenalty
         });
+
+        const group = BET_TYPE_GROUPS.find(g => g.id === "overunder");
 
         // Check if already resolved
         const underResolved = locationTodayCount > row.n;
@@ -101,6 +152,8 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
           description: `פחות מ-${row.n} אזעקות${locSuffix} היום`,
           multiplier: underResolved ? -1 : underMult,
           scope, type, location,
+          riskLevel: group?.risk,
+          oddsExplanation: group?.explanation,
         });
         bets.push({
           id: encodeId(scope, "overunder", location, "over", row.n),
@@ -109,6 +162,8 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
           description: `מעל ${row.n} אזעקות${locSuffix} היום`,
           multiplier: overResolved ? -1 : overMult,
           scope, type, location,
+          riskLevel: group?.risk,
+          oddsExplanation: group?.explanation,
         });
       }
       return bets;
@@ -118,8 +173,10 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
       return QUIET_DURATIONS.map(({ minutes, mCity, mRegion, mGeneral }) => {
         const defaultMult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
         const mult = calculateSmartOdds({
-          stats, scope, location, type: "quiet", defaultMultiplier: defaultMult, minutes, todayCount, minutesLeftToday
+          stats, scope, location, type: "quiet", defaultMultiplier: defaultMult, minutes, todayCount, minutesLeftToday, streakPenalty
         });
+        
+        const group = BET_TYPE_GROUPS.find(g => g.id === "quiet");
 
         const durationLabel = minutes < 60
           ? `${minutes} דקות`
@@ -131,6 +188,8 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
           description: `לא תהיה אזעקה${locSuffix} במשך ${durationLabel}`,
           multiplier: mult,
           scope, type, location,
+          riskLevel: group?.risk,
+          oddsExplanation: group?.explanation,
         };
       });
     }
@@ -140,11 +199,13 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
       const noMultDefault = scope === "city" ? 1.05 : scope === "region" ? 1.25 : 2.5;
 
       const yesMult = calculateSmartOdds({
-        stats, scope, location, type: "night", defaultMultiplier: yesMultDefault, direction: "yes", todayCount, minutesLeftToday
+        stats, scope, location, type: "night", defaultMultiplier: yesMultDefault, direction: "yes", todayCount, minutesLeftToday, streakPenalty
       });
       const noMult = calculateSmartOdds({
-        stats, scope, location, type: "night", defaultMultiplier: noMultDefault, direction: "no", todayCount, minutesLeftToday
+        stats, scope, location, type: "night", defaultMultiplier: noMultDefault, direction: "no", todayCount, minutesLeftToday, streakPenalty
       });
+
+      const group = BET_TYPE_GROUPS.find(g => g.id === "night");
 
       return [
         {
@@ -154,6 +215,8 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
           description: `תהיה אזעקה${locSuffix} בין 00:00-06:00 הלילה`,
           multiplier: yesMult,
           scope, type, location,
+          riskLevel: group?.risk,
+          oddsExplanation: group?.explanation,
         },
         {
           id: encodeId(scope, "night", location, "no"),
@@ -162,6 +225,8 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
           description: `לא תהיה אזעקה${locSuffix} בין 00:00-06:00 הלילה`,
           multiplier: noMult,
           scope, type, location,
+          riskLevel: group?.risk,
+          oddsExplanation: group?.explanation,
         }
       ];
     }
@@ -170,8 +235,10 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
       return TOTAL_RANGES.map(({ min, max, label, mCity, mRegion, mGeneral }) => {
         const defaultMult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
         const mult = calculateSmartOdds({
-          stats, scope, location, type: "total", defaultMultiplier: defaultMult, min, max, todayCount, minutesLeftToday, locationTodayCount
+          stats, scope, location, type: "total", defaultMultiplier: defaultMult, min, max, todayCount, minutesLeftToday, locationTodayCount, streakPenalty
         });
+
+        const group = BET_TYPE_GROUPS.find(g => g.id === "total");
 
         // Check if already resolved
         const effectiveMax = max !== null ? max : Infinity;
@@ -189,6 +256,8 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
           description: desc,
           multiplier: resolved ? -1 : mult,
           scope, type, location,
+          riskLevel: group?.risk,
+          oddsExplanation: group?.explanation,
         };
       });
     }
@@ -209,24 +278,39 @@ export interface ParsedBetId {
 }
 
 export function parseBetId(id: string): ParsedBetId | null {
-  const parts = id.split("|");
-  if (parts.length < 3) return null;
-  const [scope, type, location] = parts as [BetScope, BetType, string];
+  try {
+    const parts = id.split("|");
+    if (parts.length < 3) return null;
+    const [scope, type, location] = parts as [BetScope, BetType, string];
 
-  switch (type) {
-    case "overunder":
-      if (parts.length < 5) return null;
-      return { scope, type, location, direction: parts[3] as "over" | "under", threshold: Number(parts[4]) };
-    case "quiet":
-      if (parts.length < 4) return null;
-      return { scope, type, location, minutes: Number(parts[3]) };
-    case "night":
-      return { scope, type, location, direction: (parts[3] === "no" ? "no" : "yes") };
-    case "total":
-      if (parts.length < 5) return null;
-      return { scope, type, location, min: Number(parts[3]), max: parts[4] === "inf" ? null : Number(parts[4]) };
-    default:
-      return null;
+    switch (type) {
+      case "overunder": {
+        if (parts.length < 5) return null;
+        const threshold = Number(parts[4]);
+        if (isNaN(threshold)) return null;
+        return { scope, type, location, direction: parts[3] as "over" | "under", threshold };
+      }
+      case "quiet": {
+        if (parts.length < 4) return null;
+        const minutes = Number(parts[3]);
+        if (isNaN(minutes)) return null;
+        return { scope, type, location, minutes };
+      }
+      case "night":
+        return { scope, type, location, direction: (parts[3] === "no" ? "no" : "yes") };
+      case "total": {
+        if (parts.length < 5) return null;
+        const min = Number(parts[3]);
+        const maxVal = parts[4] === "inf" ? null : Number(parts[4]);
+        if (isNaN(min) || (maxVal !== null && isNaN(maxVal))) return null;
+        return { scope, type, location, min, max: maxVal };
+      }
+      default:
+        return null;
+    }
+  } catch (e) {
+    console.error("Error parsing bet ID:", id, e);
+    return null;
   }
 }
 
@@ -245,7 +329,7 @@ export function alertMatchesLocation(areas: string[], scope: BetScope, location:
 
 function getEndOfDay(baseMs: number): number {
   const d = new Date(baseMs);
-  d.setHours(23, 59, 59, 999);
+  d.setHours(23, 59, 59, 999); 
   return d.getTime();
 }
 

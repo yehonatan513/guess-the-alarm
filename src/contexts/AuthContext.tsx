@@ -10,6 +10,7 @@ interface UserProfile {
   created_at: string;
   wins: number;
   losses: number;
+  consecutive_wins: number;
 }
 
 interface AuthContextType {
@@ -55,6 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         username: data.username,
         coins: data.coins,
         avatar_emoji: data.avatar_emoji,
+        consecutive_wins: data.consecutive_wins || 0,
       });
       // ──────────────────────────────────────────────────────────────────
 
