@@ -50,12 +50,12 @@ const QUIET_DURATIONS = [
 ];
 
 const TOTAL_RANGES = [
-  { min: 0,  max: 0,    label: "0 אזעקות",       mCity: 150.0, mRegion: 60.0, mGeneral: 25.0 },
-  { min: 1,  max: 3,    label: "1-3 אזעקות",     mCity: 5.0,   mRegion: 8.5,  mGeneral: 12.0 },
-  { min: 4,  max: 10,   label: "4-10 אזעקות",    mCity: 4.0,   mRegion: 4.5,  mGeneral: 6.0  },
-  { min: 11, max: 20,   label: "11-20 אזעקות",   mCity: 8.0,   mRegion: 5.5,  mGeneral: 4.5  },
-  { min: 21, max: 50,   label: "21-50 אזעקות",   mCity: 20.0,  mRegion: 10.0, mGeneral: 8.0  },
-  { min: 51, max: null, label: "מעל 50 אזעקות",  mCity: 85.0,  mRegion: 35.0, mGeneral: 20.0 },
+  { min: 0,    max: 50,   label: "עד 50 אזעקות",       mCity: 80.0,  mRegion: 40.0,  mGeneral: 15.0 },
+  { min: 51,   max: 100,  label: "51-100 אזעקות",      mCity: 20.0,  mRegion: 12.0,  mGeneral: 8.0  },
+  { min: 101,  max: 200,  label: "101-200 אזעקות",     mCity: 8.0,   mRegion: 5.0,   mGeneral: 4.0  },
+  { min: 201,  max: 500,  label: "201-500 אזעקות",     mCity: 5.0,   mRegion: 4.0,   mGeneral: 3.0  },
+  { min: 501,  max: 1000, label: "501-1000 אזעקות",    mCity: 15.0,  mRegion: 8.0,   mGeneral: 4.5  },
+  { min: 1001, max: null, label: "מעל 1000 אזעקות",   mCity: 40.0,  mRegion: 20.0,  mGeneral: 8.0  },
 ];
 
 // ── Generator ─────────────────────────────────────────────────────────────────
