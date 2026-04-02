@@ -34,12 +34,12 @@ export const BET_TYPE_GROUPS = [
 
 // Over/Under: {threshold, under-mult-city, over-mult-city, under-mult-region, over-mult-region, under-general, over-general}
 const OU: Array<{ n: number; uc: number; oc: number; ur: number; or: number; ug: number; og: number }> = [
-  { n: 3,   uc: 3.5,   oc: 9.0,   ur: 6.0,   or: 5.0,   ug: 12.5, og: 1.8  },
-  { n: 5,   uc: 2.2,   oc: 14.0,  ur: 3.8,   or: 7.5,   ug: 8.5,  og: 2.2  },
-  { n: 10,  uc: 1.5,   oc: 28.0,  ur: 2.4,   or: 14.0,  ug: 4.0,  og: 2.8  },
-  { n: 20,  uc: 1.2,   oc: 75.0,  ur: 1.6,   or: 42.0,  ug: 2.2,  og: 5.5  },
-  { n: 50,  uc: 1.1,   oc: 200.0, ur: 1.2,   or: 110.0, ug: 1.4,  og: 18.5 },
-  { n: 100, uc: 1.05,  oc: 500.0, ur: 1.08,  or: 280.0, ug: 1.2,  og: 52.0 },
+  { n: 50,   uc: 1.05, oc: 80.0,  ur: 1.1,  or: 40.0,  ug: 1.3,  og: 8.0  },
+  { n: 100,  uc: 1.1,  oc: 150.0, ur: 1.3,  or: 80.0,  ug: 1.5,  og: 15.0 },
+  { n: 200,  uc: 1.3,  oc: 300.0, ur: 1.6,  or: 180.0, ug: 2.0,  og: 35.0 },
+  { n: 500,  uc: 1.8,  oc: 500.0, ur: 2.5,  or: 350.0, ug: 3.5,  og: 90.0 },
+  { n: 1000, uc: 2.5,  oc: 500.0, ur: 4.0,  or: 500.0, ug: 1.2,  og: 8.0  },
+  { n: 2000, uc: 1.05, oc: 500.0, ur: 1.05, or: 500.0, ug: 1.8,  og: 80.0 },
 ];
 
 const QUIET_DURATIONS = [
