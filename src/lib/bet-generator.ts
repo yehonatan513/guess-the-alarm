@@ -34,12 +34,12 @@ export const BET_TYPE_GROUPS = [
 
 // Over/Under: {threshold, under-mult-city, over-mult-city, under-mult-region, over-mult-region, under-general, over-general}
 const OU: Array<{ n: number; uc: number; oc: number; ur: number; or: number; ug: number; og: number }> = [
-  { n: 3,   uc: 3.5,   oc: 9.0,   ur: 6.0,   or: 5.0,   ug: 12.5, og: 1.8  },
-  { n: 5,   uc: 2.2,   oc: 14.0,  ur: 3.8,   or: 7.5,   ug: 8.5,  og: 2.2  },
-  { n: 10,  uc: 1.5,   oc: 28.0,  ur: 2.4,   or: 14.0,  ug: 4.0,  og: 2.8  },
-  { n: 20,  uc: 1.2,   oc: 75.0,  ur: 1.6,   or: 42.0,  ug: 2.2,  og: 5.5  },
-  { n: 50,  uc: 1.1,   oc: 200.0, ur: 1.2,   or: 110.0, ug: 1.4,  og: 18.5 },
-  { n: 100, uc: 1.05,  oc: 500.0, ur: 1.08,  or: 280.0, ug: 1.2,  og: 52.0 },
+  { n: 50,   uc: 1.05, oc: 80.0,  ur: 1.1,  or: 40.0,  ug: 1.3,  og: 8.0  },
+  { n: 100,  uc: 1.1,  oc: 150.0, ur: 1.3,  or: 80.0,  ug: 1.5,  og: 15.0 },
+  { n: 200,  uc: 1.3,  oc: 300.0, ur: 1.6,  or: 180.0, ug: 2.0,  og: 35.0 },
+  { n: 500,  uc: 1.8,  oc: 500.0, ur: 2.5,  or: 350.0, ug: 3.5,  og: 90.0 },
+  { n: 1000, uc: 2.5,  oc: 500.0, ur: 4.0,  or: 500.0, ug: 1.2,  og: 8.0  },
+  { n: 2000, uc: 1.05, oc: 500.0, ur: 1.05, or: 500.0, ug: 1.8,  og: 80.0 },
 ];
 
 const QUIET_DURATIONS = [
@@ -50,12 +50,12 @@ const QUIET_DURATIONS = [
 ];
 
 const TOTAL_RANGES = [
-  { min: 0,  max: 0,    label: "0 אזעקות",       mCity: 150.0, mRegion: 60.0, mGeneral: 25.0 },
-  { min: 1,  max: 3,    label: "1-3 אזעקות",     mCity: 5.0,   mRegion: 8.5,  mGeneral: 12.0 },
-  { min: 4,  max: 10,   label: "4-10 אזעקות",    mCity: 4.0,   mRegion: 4.5,  mGeneral: 6.0  },
-  { min: 11, max: 20,   label: "11-20 אזעקות",   mCity: 8.0,   mRegion: 5.5,  mGeneral: 4.5  },
-  { min: 21, max: 50,   label: "21-50 אזעקות",   mCity: 20.0,  mRegion: 10.0, mGeneral: 8.0  },
-  { min: 51, max: null, label: "מעל 50 אזעקות",  mCity: 85.0,  mRegion: 35.0, mGeneral: 20.0 },
+  { min: 0,    max: 50,   label: "עד 50 אזעקות",       mCity: 80.0,  mRegion: 40.0,  mGeneral: 15.0 },
+  { min: 51,   max: 100,  label: "51-100 אזעקות",      mCity: 20.0,  mRegion: 12.0,  mGeneral: 8.0  },
+  { min: 101,  max: 200,  label: "101-200 אזעקות",     mCity: 8.0,   mRegion: 5.0,   mGeneral: 4.0  },
+  { min: 201,  max: 500,  label: "201-500 אזעקות",     mCity: 5.0,   mRegion: 4.0,   mGeneral: 3.0  },
+  { min: 501,  max: 1000, label: "501-1000 אזעקות",    mCity: 15.0,  mRegion: 8.0,   mGeneral: 4.5  },
+  { min: 1001, max: null, label: "מעל 1000 אזעקות",   mCity: 40.0,  mRegion: 20.0,  mGeneral: 8.0  },
 ];
 
 // ── Generator ─────────────────────────────────────────────────────────────────
