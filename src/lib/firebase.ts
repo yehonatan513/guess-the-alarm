@@ -3,13 +3,13 @@ import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBVi6F2PIS6F6l8haZrcytqlceYhlyrUkE",
-  authDomain: "guess-the-alarm.firebaseapp.com",
-  databaseURL: "https://guess-the-alarm-default-rtdb.firebaseio.com",
-  projectId: "guess-the-alarm",
-  storageBucket: "guess-the-alarm.firebasestorage.app",
-  messagingSenderId: "781670118217",
-  appId: "1:781670118217:web:980fdc3799583c3ba92098"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
