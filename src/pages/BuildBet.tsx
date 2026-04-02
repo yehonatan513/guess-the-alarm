@@ -15,7 +15,7 @@ const SCOPE_TABS: { id: BetScope; label: string; icon: string }[] = [
 
 const BuildBet = () => {
   const { stats } = useAlertStats();
-  const { todayCount } = useAlertsContext();
+  const { todayCount, todayCountByCity, todayCountByRegion } = useAlertsContext();
   const [scope, setScope]           = useState<BetScope>("general");
   const [location, setLocation]     = useState<string>("כללי");
   const [citySearch, setCitySearch] = useState("");
@@ -32,15 +32,15 @@ const BuildBet = () => {
   const minutesLeftToday = useMemo(() => {
     const now = new Date();
     const endOfDay = new Date(now);
-    endOfDay.setHours(23, 0, 0, 0);
+    endOfDay.setHours(23, 59, 59, 999);
     return Math.max(0, Math.floor((endOfDay.getTime() - now.getTime()) / 60000));
   }, []);
 
   const bets = useMemo(
     () => (selectedType && locationReady)
-      ? generateBets(scope, selectedType, location || "כללי", stats, todayCount, minutesLeftToday)
+      ? generateBets(scope, selectedType, location || "כללי", stats, todayCount, minutesLeftToday, todayCountByCity, todayCountByRegion)
       : [],
-    [scope, selectedType, location, locationReady, stats, todayCount, minutesLeftToday]
+    [scope, selectedType, location, locationReady, stats, todayCount, minutesLeftToday, todayCountByCity, todayCountByRegion]
   );
 
   const handleScopeChange = (s: BetScope) => {

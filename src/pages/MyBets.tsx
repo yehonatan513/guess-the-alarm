@@ -4,9 +4,20 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { getBetEndTime } from "@/lib/bet-generator";
+import { useBetExpiry } from "@/hooks/useBetExpiry";
 
 interface Bet {
   id: string;
+  type: string;
+  description: string;
+  amount: number;
+  multiplier: number;
+  status: string;
+  coins_won: number;
+  created_at: string;
+}
+
+interface BetData {
   type: string;
   description: string;
   amount: number;
@@ -43,13 +54,6 @@ const MyBets = () => {
   const { user } = useAuth();
   const [bets, setBets] = useState<Bet[]>([]);
   const [tab, setTab] = useState<"open" | "history">("open");
-  const [, setTick] = useState(0);
-
-  // Tick every second so the countdown updates live
-  useEffect(() => {
-    const t = setInterval(() => setTick(n => n + 1), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -57,8 +61,11 @@ const MyBets = () => {
     const unsub = onValue(betsRef, (snap) => {
       if (snap.exists()) {
         const data = snap.val();
-        const arr = Object.entries(data).map(([id, v]: any) => ({ id, ...v }));
-        arr.sort((a: Bet, b: Bet) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        const arr = Object.entries(data).map(([id, v]: [string, any]) => ({
+          id,
+          ...(v as BetData),
+        }));
+        arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         setBets(arr);
       } else {
         setBets([]);
@@ -105,65 +112,68 @@ const MyBets = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map((bet, i) => {
-              const expiry = bet.status === "open" ? getBetExpiry(bet) : null;
-              const isExpiredDisplay = expiry === "00:00";
-              const isUrgent = expiry && !isExpiredDisplay && expiry.startsWith("0:");
-
-              return (
-                <div
-                  key={bet.id}
-                  className="bg-card border border-border rounded-xl p-4 space-y-2 animate-fadeIn"
-                  style={{ animationDelay: `${i * 60}ms` }}
-                >
-                  <div className="flex justify-between items-start">
-                    <Badge
-                      variant={
-                        bet.status === "open"
-                          ? "secondary"
-                          : bet.status === "won"
-                          ? "default"
-                          : "destructive"
-                      }
-                      className="text-xs"
-                    >
-                      {bet.status === "open" && "פתוח"}
-                      {bet.status === "won" && "ניצחון! 🏆"}
-                      {bet.status === "lost" && "הפסד ✗"}
-                    </Badge>
-                    <span className="text-primary font-black text-sm">x{bet.multiplier}</span>
-                  </div>
-
-                  <p className="text-foreground text-sm font-bold">{bet.description}</p>
-
-                  <div className="flex justify-between items-center text-xs text-muted-foreground">
-                    <span>🪙 {formatCoins(bet.amount)}</span>
-                    <span>{new Date(bet.created_at).toLocaleDateString("he-IL")}</span>
-                  </div>
-
-                  {/* Expiry countdown for open bets */}
-                  {expiry && (
-                    <div className={`flex items-center gap-1.5 text-xs font-mono font-bold px-2 py-1 rounded-lg w-fit ${
-                      isExpiredDisplay
-                        ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 animate-pulse"
-                        : isUrgent
-                        ? "bg-destructive/15 text-destructive"
-                        : "bg-primary/10 text-primary"
-                    }`}>
-                      <span>{isExpiredDisplay ? "⚡" : isUrgent ? "🔴" : "⏱️"}</span>
-                      <span>{isExpiredDisplay ? "מחשב תוצאה..." : `נסגר בעוד ${expiry}`}</span>
-                    </div>
-                  )}
-
-                  {bet.status === "won" && (
-                    <p className="text-primary font-bold text-sm">+{formatCoins(bet.coins_won)} 🪙</p>
-                  )}
-                </div>
-              );
-            })}
+            {filtered.map((bet, i) => (
+              <BetRow key={bet.id} bet={bet} index={i} />
+            ))}
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+const BetRow = ({ bet, index }: { bet: Bet; index: number }) => {
+  const expiry = useBetExpiry(bet);
+  const isExpiredDisplay = expiry === "00:00";
+  const isUrgent = expiry && !isExpiredDisplay && expiry.startsWith("0:");
+
+  return (
+    <div
+      className="bg-card border border-border rounded-xl p-4 space-y-2 animate-fadeIn"
+      style={{ animationDelay: `${index * 60}ms` }}
+    >
+      <div className="flex justify-between items-start">
+        <Badge
+          variant={
+            bet.status === "open"
+              ? "secondary"
+              : bet.status === "won"
+              ? "default"
+              : "destructive"
+          }
+          className="text-xs"
+        >
+          {bet.status === "open" && "פתוח"}
+          {bet.status === "won" && "ניצחון! 🏆"}
+          {bet.status === "lost" && "הפסד ✗"}
+        </Badge>
+        <span className="text-primary font-black text-sm">x{bet.multiplier}</span>
+      </div>
+
+      <p className="text-foreground text-sm font-bold">{bet.description}</p>
+
+      <div className="flex justify-between items-center text-xs text-muted-foreground">
+        <span>🪙 {formatCoins(bet.amount)}</span>
+        <span>{new Date(bet.created_at).toLocaleDateString("he-IL")}</span>
+      </div>
+
+      {/* Expiry countdown for open bets */}
+      {bet.status === "open" && expiry && (
+        <div className={`flex items-center gap-1.5 text-xs font-mono font-bold px-2 py-1 rounded-lg w-fit ${
+          isExpiredDisplay
+            ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 animate-pulse"
+            : isUrgent
+            ? "bg-destructive/15 text-destructive"
+            : "bg-primary/10 text-primary"
+        }`}>
+          <span>{isExpiredDisplay ? "⚡" : isUrgent ? "🔴" : "⏱️"}</span>
+          <span>{isExpiredDisplay ? "מחשב תוצאה..." : `נסגר בעוד ${expiry}`}</span>
+        </div>
+      )}
+
+      {bet.status === "won" && (
+        <p className="text-primary font-bold text-sm">+{formatCoins(bet.coins_won)} 🪙</p>
+      )}
     </div>
   );
 };

@@ -17,6 +17,12 @@ interface LeaderboardEntry {
   avatar_emoji: string;
 }
 
+interface LeaderboardData {
+  coins: number;
+  username: string;
+  avatar_emoji: string;
+}
+
 interface Group {
   id: string;
   name: string;
@@ -49,7 +55,10 @@ const Profile = () => {
       if (snap.exists()) {
         const data = snap.val();
         const arr = Object.entries(data)
-          .map(([uid, v]: any) => ({ uid, ...v }))
+          .map(([uid, v]: [string, any]) => {
+            const leaderData = v as LeaderboardData;
+            return { uid, ...leaderData };
+          })
           .sort((a, b) => b.coins - a.coins);
         setLeaders(arr);
       } else {
@@ -58,7 +67,12 @@ const Profile = () => {
         if (usersSnap.exists()) {
           const data = usersSnap.val();
           const arr = Object.entries(data)
-            .map(([uid, v]: any) => ({ uid, username: v.username, coins: v.coins, avatar_emoji: v.avatar_emoji }))
+            .map(([uid, v]: [string, any]) => ({
+              uid,
+              username: v.username,
+              coins: v.coins,
+              avatar_emoji: v.avatar_emoji
+            }))
             .sort((a, b) => b.coins - a.coins)
             .slice(0, 50);
           setLeaders(arr);

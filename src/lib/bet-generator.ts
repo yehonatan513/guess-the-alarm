@@ -91,7 +91,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
         });
 
         // Check if already resolved
-        const underResolved = locationTodayCount >= row.n;
+        const underResolved = locationTodayCount > row.n;
         const overResolved = locationTodayCount > row.n;
 
         bets.push({
@@ -245,7 +245,7 @@ export function alertMatchesLocation(areas: string[], scope: BetScope, location:
 
 function getEndOfDay(baseMs: number): number {
   const d = new Date(baseMs);
-  d.setHours(23, 0, 0, 0);
+  d.setHours(23, 59, 59, 999);
   return d.getTime();
 }
 

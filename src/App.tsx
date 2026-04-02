@@ -65,11 +65,20 @@ const LoggedInShell = () => {
 
   // Run region migration once
   useEffect(() => {
-    if (localStorage.getItem("regions_migrated_v3") !== "true") {
-      runRegionMigration().then(() => {
+    const alreadyMigrated = localStorage.getItem("regions_migrated_v3") === "true";
+    if (alreadyMigrated) return;
+    
+    // Prevent race condition by setting to 'pending' first
+    localStorage.setItem("regions_migrated_v3", "pending");
+    
+    runRegionMigration()
+      .then(() => {
         localStorage.setItem("regions_migrated_v3", "true");
+      })
+      .catch((error) => {
+        console.error("Region migration failed:", error);
+        localStorage.removeItem("regions_migrated_v3");
       });
-    }
   }, []);
 
   return (

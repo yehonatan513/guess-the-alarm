@@ -43,23 +43,35 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
 
   const handleBet = async () => {
     if (!user || !profile || !canBet) return;
-    await push(ref(db, "bets"), {
-      uid: user.uid,
-      username: profile.username,
-      type: bet.id,
-      description: bet.title,
-      area: "",
-      amount,
-      multiplier: bet.multiplier,
-      status: "open",
-      coins_won: 0,
-      created_at: new Date().toISOString(),
-      resolved_at: null,
-    });
-    await updateCoins(profile.coins - amount);
-    toast.success("ההימור נרשם! 🎰", { description: `${formatNum(amount)} מטבעות על ${bet.title}` });
-    setAmount(0);
-    onClose();
+
+    // Validate amount
+    if (!Number.isInteger(amount) || amount <= 0) {
+      toast.error("סכום הימור לא תקין");
+      return;
+    }
+
+    try {
+      await push(ref(db, "bets"), {
+        uid: user.uid,
+        username: profile.username,
+        type: bet.id,
+        description: bet.title,
+        area: "",
+        amount,
+        multiplier: bet.multiplier,
+        status: "open",
+        coins_won: 0,
+        created_at: new Date().toISOString(),
+        resolved_at: null,
+      });
+      await updateCoins(profile.coins - amount);
+      toast.success("ההימור נרשם! 🎰", { description: `${formatNum(amount)} מטבעות על ${bet.title}` });
+      setAmount(0);
+      onClose();
+    } catch (error) {
+      console.error("Failed to place bet:", error);
+      toast.error("שגיאה בעת הצבת הימור");
+    }
   };
 
   return (

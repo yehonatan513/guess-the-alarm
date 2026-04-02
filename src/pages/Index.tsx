@@ -41,7 +41,7 @@ const Index = () => {
   const minutesLeftToday = useMemo(() => {
     const now = new Date();
     const endOfDay = new Date(now);
-    endOfDay.setHours(23, 0, 0, 0);
+    endOfDay.setHours(23, 59, 59, 999);
     return Math.max(0, Math.floor((endOfDay.getTime() - now.getTime()) / 60000));
   }, []);
 
@@ -49,7 +49,7 @@ const Index = () => {
     () => (selectedType && locationReady)
       ? generateBets(scope, selectedType, location || "כללי", stats, todayCount, minutesLeftToday, todayCountByCity, todayCountByRegion)
       : [],
-    [scope, selectedType, location, locationReady, stats, todayCount, minutesLeftToday]
+    [scope, selectedType, location, locationReady, stats, todayCount, minutesLeftToday, todayCountByCity, todayCountByRegion]
   );
 
   const handleScopeChange = (s: BetScope) => {

@@ -123,7 +123,7 @@ function computeResult(
                 if (count > parsed.threshold!) return "win";
                 if (isExpired) return "loss";
               } else {
-                if (count >= parsed.threshold!) return "loss";
+                if (count > parsed.threshold!) return "loss";
                 if (isExpired) return "win";
               }
               return null;
@@ -139,7 +139,7 @@ function computeResult(
             case "night": {
               const startNight = endTime - 6 * 60 * 60 * 1000;
               const hasNight = hasAlertInWindow(startNight, endTime, (a) => matchAlert(a.areas));
-              const direction = parsed.direction === "no" ? "no" : "yes";
+              const direction = parsed.direction;
               if (direction === "yes") {
                 if (hasNight) return "win";
                 if (isExpired) return "loss";
@@ -273,10 +273,16 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
     return () => clearInterval(interval);
   }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Also resolve immediately whenever alerts change
+  // Also resolve immediately whenever alerts change (with debounce)
   useEffect(() => {
     if (!user) return;
-    if (alerts.length === 0) return; // skip initial empty state
-    runResolution();
+    if (alerts.length === 0) return;
+    
+    // Debounce to prevent multiple rapid calls
+    const timeout = setTimeout(() => {
+      runResolution();
+    }, 500);
+    
+    return () => clearTimeout(timeout);
   }, [alerts, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 }
