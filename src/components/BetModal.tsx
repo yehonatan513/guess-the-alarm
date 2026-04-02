@@ -1,3 +1,4 @@
+import { FirebaseBet } from "../types";
 import React, { useState } from "react";
 import { ref, push } from "firebase/database";
 import { db } from "@/lib/firebase";
@@ -69,7 +70,7 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
       if (snap.exists()) {
         const bets = snap.val();
         const oneHourAgo = Date.now() - 60 * 60 * 1000;
-        const isDuplicate = Object.values(bets).some((b: any) => 
+        const isDuplicate = Object.values(bets).some((b: FirebaseBet) =>
           b.type === bet.id && 
           b.status === "open" && 
           new Date(b.created_at).getTime() > oneHourAgo

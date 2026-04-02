@@ -3,6 +3,13 @@ import { AlertStats } from "@/hooks/useAlertStats";
 function poissonCDF(lambda: number, k: number): number {
   if (k < 0) return 0;
   if (lambda <= 0) return 1;
+  // Use log domain for large lambda to avoid underflow
+  if (lambda > 100) {
+    // Normal approximation for large lambda (mu = lambda, sigma = sqrt(lambda))
+    const z = (k + 0.5 - lambda) / Math.sqrt(lambda);
+    // Approximation of standard normal CDF
+    return 0.5 * (1 + mathErf(z / Math.SQRT2));
+  }
   let p = Math.exp(-lambda);
   let sum = p;
   for (let i = 1; i <= k; i++) {
@@ -10,6 +17,20 @@ function poissonCDF(lambda: number, k: number): number {
     sum += p;
   }
   return Math.min(1, sum);
+}
+
+function mathErf(x: number): number {
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  const a1 =  0.254829592;
+  const a2 = -0.284496736;
+  const a3 =  1.421413741;
+  const a4 = -1.453152027;
+  const a5 =  1.061405429;
+  const p  =  0.3275911;
+  const t = 1.0 / (1.0 + p * x);
+  const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+  return sign * y;
 }
 
 // Maps probability to multiplier within [minMult, maxMult].

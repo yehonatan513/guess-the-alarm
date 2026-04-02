@@ -333,15 +333,6 @@ function getEndOfDay(baseMs: number): number {
   return d.getTime();
 }
 
-function getNextMorning(baseMs: number): number {
-  const d = new Date(baseMs);
-  if (d.getHours() >= 6) {
-    d.setDate(d.getDate() + 1);
-  }
-  d.setHours(6, 0, 0, 0);
-  return d.getTime();
-}
-
 export function getBetEndTime(betId: string, createdAtMs: number): number {
   if (betId.includes("|")) {
     const parsed = parseBetId(betId);

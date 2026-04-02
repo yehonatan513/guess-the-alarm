@@ -232,7 +232,7 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
       endOfDay.setHours(23, 59, 59, 999);
       const minutesLeftToday = Math.max(0, Math.floor((endOfDay.getTime() - now.getTime()) / 60000));
 
-      const updates: Record<string, any> = {};
+      const updates: Record<string, string | number | null> = {};
       let coinsToAdd = 0;
       let wins = 0;
       let losses = 0;
@@ -271,7 +271,7 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
         }
 
         // ── Apply coin changes and streak in one go ──
-        const finalCoinUpdates: Record<string, any> = {};
+        const finalCoinUpdates: Record<string, string | number | null> = {};
         if (coinsToAdd > 0) {
           await runTransaction(ref(db, `users/${user.uid}/coins`), (current) => (current || 0) + coinsToAdd);
           const newSnap = await get(ref(db, `users/${user.uid}/coins`));
@@ -321,7 +321,7 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
     runResolution();
     const interval = setInterval(runResolution, 30000);
     return () => clearInterval(interval);
-  }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
 
   // Also resolve immediately whenever alerts change (with debounce)
   useEffect(() => {
@@ -334,5 +334,5 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
     }, 500);
     
     return () => clearTimeout(timeout);
-  }, [alerts, user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [alerts, user?.uid]);
 }
