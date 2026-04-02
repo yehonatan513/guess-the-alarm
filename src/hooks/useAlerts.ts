@@ -76,7 +76,7 @@ export function useAlerts() {
               const cities = Array.isArray(a.cities) ? a.cities : [a.cities || "אזור לא ידוע"];
               // Only count alert if it happened today (after local midnight)
               if (alertTimeSec >= todayMidnight) {
-                todayCount++;
+                todayCount += cities.length;
                 const regionsHitThisAlert = new Set<string>();
                 for (const cityName of cities) {
                   todayCountByCity[cityName] = (todayCountByCity[cityName] || 0) + 1;
