@@ -83,10 +83,10 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
         const overMultDefault  = scope === "city" ? row.oc : scope === "region" ? row.or : row.og;
         
         const underMult = calculateSmartOdds({
-          stats, scope, location, type: "overunder", defaultMultiplier: underMultDefault, direction: "under", threshold: row.n, todayCount, minutesLeftToday
+          stats, scope, location, type: "overunder", defaultMultiplier: underMultDefault, direction: "under", threshold: row.n, todayCount, minutesLeftToday, locationTodayCount
         });
         const overMult = calculateSmartOdds({
-          stats, scope, location, type: "overunder", defaultMultiplier: overMultDefault, direction: "over", threshold: row.n, todayCount, minutesLeftToday
+          stats, scope, location, type: "overunder", defaultMultiplier: overMultDefault, direction: "over", threshold: row.n, todayCount, minutesLeftToday, locationTodayCount
         });
 
         // Check if already resolved
@@ -169,7 +169,7 @@ export function generateBets(scope: BetScope, type: BetType, location: string, s
       return TOTAL_RANGES.map(({ min, max, label, mCity, mRegion, mGeneral }) => {
         const defaultMult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
         const mult = calculateSmartOdds({
-          stats, scope, location, type: "total", defaultMultiplier: defaultMult, min, max, todayCount, minutesLeftToday
+          stats, scope, location, type: "total", defaultMultiplier: defaultMult, min, max, todayCount, minutesLeftToday, locationTodayCount
         });
 
         // Check if already resolved
