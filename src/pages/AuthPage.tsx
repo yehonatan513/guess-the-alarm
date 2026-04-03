@@ -6,6 +6,7 @@ import {
 import { auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { validateUsername } from "@/utils/validation";
 
 // Map Firebase error codes to user-friendly Hebrew messages
 const getFirebaseErrorMessage = (code: string): string => {
@@ -28,14 +29,6 @@ const AuthPage = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Validate username (alphas, numbers, 3-15 chars)
-  const validateUsername = (name: string) => {
-    const regex = /^[a-zA-Z0-0א-ת._-]{3,15}$/;
-    if (!name) return "אנא הזן שם משתמש";
-    if (!regex.test(name)) return "שם משתמש חייב להיות 3-15 תווים (ללא רווחים)";
-    return null;
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
