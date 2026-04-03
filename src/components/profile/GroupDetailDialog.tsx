@@ -1,13 +1,7 @@
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
-
-interface Group {
-  id: string;
-  name: string;
-  created_by: string;
-  members: Record<string, { username: string; avatar_emoji: string; coins: number }>;
-}
+import { Group } from "@/types";
 
 interface Props {
   group: Group | null;

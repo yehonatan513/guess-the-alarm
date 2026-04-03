@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { User, onAuthStateChanged, signOut } from "firebase/auth";
 import { ref, get, set, update } from "firebase/database";
 import { auth, db } from "@/lib/firebase";
+import { Group } from "@/types";
 
 interface UserProfile {
   username: string;
@@ -90,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const groupsSnap = await get(ref(db, "groups"));
       if (groupsSnap.exists()) {
-        const groups = groupsSnap.val() as Record<string, any>;
+        const groups = groupsSnap.val() as Record<string, Group>;
         const groupUpdates: Record<string, number> = {};
         for (const [groupId, group] of Object.entries(groups)) {
           if (group.members && group.members[user.uid]) {
