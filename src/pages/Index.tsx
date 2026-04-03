@@ -61,7 +61,7 @@ const Index = () => {
 
   const bets = useMemo(() => {
     if (!selectedType || !locationReady) return [];
-    const generated = generateBets(
+    return generateBets(
       scope,
       selectedType,
       location || "כללי",
@@ -72,8 +72,6 @@ const Index = () => {
       todayCountByRegion,
       profile?.consecutive_wins || 0
     );
-    // Filter out bets that are already resolved/locked to reduce clutter
-    return generated.filter(bet => bet.multiplier !== -1);
   }, [scope, selectedType, location, locationReady, stats, todayCount, minutesLeftToday, todayCountByCity, todayCountByRegion, profile?.consecutive_wins]);
 
   const handleScopeChange = (s: BetScope) => {
