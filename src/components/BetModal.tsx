@@ -120,7 +120,7 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
       <DialogContent className="bg-card border-border max-w-sm mx-auto">
         <DialogHeader>
           <DialogTitle className="text-foreground text-right">
-            <span className="text-2xl ml-2">{bet.emoji}</span>
+            <span className="text-2xl ml-2" aria-hidden="true">{bet.emoji}</span>
             {bet.title}
           </DialogTitle>
         </DialogHeader>
@@ -151,14 +151,14 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
               <button
                 key={q}
                 onClick={() => setAmount(q)}
-                className="px-3 py-1.5 bg-secondary rounded-lg text-xs text-foreground font-bold hover:bg-primary/20 transition-colors"
+                className="px-3 py-1.5 bg-secondary rounded-lg text-xs text-foreground font-bold hover:bg-primary/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 {q >= 1_000_000 ? `${q / 1_000_000}M` : formatNum(q)}
               </button>
             ))}
             <button
               onClick={() => profile && setAmount(profile.coins)}
-              className="px-3 py-1.5 bg-destructive/20 rounded-lg text-xs text-destructive font-bold hover:bg-destructive/30 transition-colors"
+              className="px-3 py-1.5 bg-destructive/20 rounded-lg text-xs text-destructive font-bold hover:bg-destructive/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               MAX
             </button>
@@ -176,7 +176,7 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
             disabled={!canBet}
             className="w-full font-bold text-lg h-12"
           >
-            המר! 🎯
+            {isSubmitting ? <span className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" /> : "המר! 🎯"}
           </Button>
         </div>
       </DialogContent>
