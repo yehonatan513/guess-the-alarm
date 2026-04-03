@@ -1,6 +1,6 @@
 import { FirebaseBet } from "../types";
-import React, { useState } from "react";
-import { ref, push } from "firebase/database";
+import React, { useState, useRef } from "react";
+import { ref, push, runTransaction } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,8 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
   const { user, profile, updateCoins } = useAuth();
   const [amount, setAmount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Ref-based lock to prevent concurrent submissions even before state update
+  const submittingRef = useRef(false);
 
   if (!bet) return null;
 
@@ -48,7 +50,8 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
   const canBet = amount > 0 && profile && !isSubmitting;
 
   const handleBet = async () => {
-    if (isSubmitting) return;
+    // Double-guard: check both ref (sync) and state to prevent race conditions
+    if (submittingRef.current || isSubmitting) return;
     if (!user || !profile || !canBet) return;
 
     // Validate amount
@@ -56,37 +59,52 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
       toast.error("סכום הימור לא תקין");
       return;
     }
-    
+
     if (amount > profile.coins) {
       toast.error("אין לך מספיק מטבעות להימור זה");
       return;
     }
 
-    // Duplicate check: Same user, same bet id, placed in last 60 minutes
+    // Atomically set the lock
+    submittingRef.current = true;
+    setIsSubmitting(true);
+
     try {
-      setIsSubmitting(true);
+      // Duplicate check: Same user, same bet id, placed in last 60 minutes
       const recentQuery = query(ref(db, "bets"), orderByChild("uid"), equalTo(user.uid));
       const snap = await get(recentQuery);
       if (snap.exists()) {
         const bets = snap.val();
         const oneHourAgo = Date.now() - 60 * 60 * 1000;
         const isDuplicate = Object.values(bets).some((b: FirebaseBet) =>
-          b.type === bet.id && 
-          b.status === "open" && 
+          b.type === bet.id &&
+          b.status === "open" &&
           new Date(b.created_at).getTime() > oneHourAgo
         );
         if (isDuplicate) {
           toast.error("כבר הצבת הימור זהה בשעה האחרונה");
-          setIsSubmitting(false);
           return;
         }
       }
-    } catch (e) {
-      console.warn("Duplicate check failed, proceeding anyway", e);
-    }
 
-    try {
-      // 1. Push bet to DB first
+      // Use a transaction on the user's coins to atomically verify balance and deduct,
+      // preventing double-spend from concurrent submissions.
+      const userCoinsRef = ref(db, `users/${user.uid}/coins`);
+      const transactionResult = await runTransaction(userCoinsRef, (currentCoins: number | null) => {
+        const coins = currentCoins ?? 0;
+        if (coins < amount) {
+          // Abort transaction — insufficient funds
+          return undefined;
+        }
+        return coins - amount;
+      });
+
+      if (!transactionResult.committed) {
+        toast.error("אין לך מספיק מטבעות להימור זה");
+        return;
+      }
+
+      // Coins deducted atomically — now record the bet
       await push(ref(db, "bets"), {
         uid: user.uid,
         username: profile.username,
@@ -101,9 +119,9 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
         resolved_at: null,
       });
 
-      // 2. Only then deduct coins
+      // Sync local profile state with the new balance
       await updateCoins(profile.coins - amount);
-      
+
       toast.success("ההימור נרשם! 🎰", { description: `${formatNum(amount)} מטבעות על ${bet.title}` });
       setAmount(0);
       onClose();
@@ -111,6 +129,7 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
       console.error("Failed to place bet:", error);
       toast.error("שגיאה בעת הצבת הימור");
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -125,7 +144,7 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
           </DialogTitle>
         </DialogHeader>
         <p className="text-muted-foreground text-sm text-right">{bet.description}</p>
-        
+
         {bet.riskLevel && (
           <div className="flex justify-between items-center bg-secondary/30 p-2 rounded-lg text-xs">
             <Badge variant={bet.riskLevel === "גבוה" ? "destructive" : "secondary"} className="font-bold">
