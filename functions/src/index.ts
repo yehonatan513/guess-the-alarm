@@ -153,7 +153,7 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
     
     const activeAlerts: Alert[] = [];
     if (data.active && Array.isArray(data.active)) {
-      data.active.forEach((a: any, i: number) => {
+      data.active.forEach((a: Record<string, unknown>, i: number) => {
         activeAlerts.push({
           id: `active-${Date.now()}-${i}`,
           areas: a.data ? (Array.isArray(a.data) ? a.data : a.data.split(", ")) : [a.title || "אזור לא ידוע"],
@@ -169,9 +169,9 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
 
     if (data.history && Array.isArray(data.history)) {
-      data.history.forEach((group: any) => {
+      data.history.forEach((group: Record<string, unknown>) => {
         if (group.alerts && Array.isArray(group.alerts)) {
-          group.alerts.forEach((a: any, i: number) => {
+          group.alerts.forEach((a: Record<string, unknown>, i: number) => {
             const alertTimeSec: number = a.time ?? 0;
             if (alertTimeSec >= todayMidnight) {
               todayCount++;
@@ -199,7 +199,7 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
     // We check all historical alerts to see if any are newer than what we processed last time
     // We only process 'allAlerts' because 'activeAlerts' are live and will eventually be in history too, 
     // but to avoid missed live alerts, we might want to just count history since it's an archive of the day.
-    allAlerts.forEach((alert: any) => {
+    allAlerts.forEach((alert: Record<string, unknown>) => {
       if (alert.originalTimeSec > lastProcessedTime) {
         if (alert.originalTimeSec > maxTimeSeen) {
           maxTimeSeen = alert.originalTimeSec;
@@ -264,11 +264,11 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
       return;
     }
     
-    const bets = snapshot.val() as Record<string, any>;
+    const bets = snapshot.val() as Record<string, Record<string, unknown>>;
     const hour = now.getHours();
     
     // Track updates
-    const updates: Record<string, any> = {};
+    const updates: Record<string, unknown> = {};
     const userWins: Record<string, { coins: number; wins: number }> = {};
     const userLosses: Record<string, number> = {};
 
@@ -291,7 +291,7 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
             if (betDate.toDateString() === now.toDateString()) result = "loss";
           }
           break;
-        case "b3":
+        case "b3": {
           const centralCities = allAlerts.filter(a =>
             a.areas.some(c =>
               c.includes("תל אביב") || c.includes("רמת גן") || c.includes("גבעתיים") ||
@@ -303,6 +303,7 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
           if (centralCities.length > 10) result = "win";
           else if (hour >= 23) result = "loss";
           break;
+        }
         case "b4":
         case "b10":
         case "b16": { // Time based

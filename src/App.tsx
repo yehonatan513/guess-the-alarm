@@ -21,7 +21,7 @@ import { runRegionMigration } from "./utils/migrateRegions";
 // ── Theme Context ──────────────────────────────────────────
 type Theme = "dark" | "light";
 
-export const ThemeContext = createContext<{
+const ThemeContext = createContext<{
   theme: Theme;
   toggleTheme: () => void;
 }>({
