@@ -8,6 +8,20 @@ interface Alert {
   type: string;
 }
 
+interface RawAlert {
+  data?: string;
+  title?: string;
+  cat?: string;
+  time?: number;
+  cities?: string | string[];
+  threat?: number;
+}
+
+interface HistoryGroup {
+  id?: number | string;
+  alerts?: RawAlert[];
+}
+
 interface AlertsState {
   alerts: Alert[];
   activeAlerts: Alert[];
@@ -52,7 +66,7 @@ export function useAlerts() {
       // ... same processing logic ...
       const activeAlerts: Alert[] = [];
       if (data.active && Array.isArray(data.active) && data.active.length > 0) {
-        data.active.forEach((a: Record<string, unknown>, i: number) => {
+        data.active.forEach((a: RawAlert, i: number) => {
           activeAlerts.push({
             id: `active-${Date.now()}-${i}`,
             areas: a.data ? (Array.isArray(a.data) ? a.data : a.data.split(", ")) : [a.title || "אזור לא ידוע"],
@@ -71,9 +85,9 @@ export function useAlerts() {
       const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
 
       if (data.history && Array.isArray(data.history)) {
-        data.history.forEach((group: Record<string, unknown>) => {
+        data.history.forEach((group: HistoryGroup) => {
           if (group.alerts && Array.isArray(group.alerts)) {
-            group.alerts.forEach((a: Record<string, unknown>, i: number) => {
+            group.alerts.forEach((a: RawAlert, i: number) => {
               const alertTimeSec: number = a.time ?? 0;
               const cities = Array.isArray(a.cities) ? a.cities : [a.cities || "אזור לא ידוע"];
               if (alertTimeSec >= todayMidnight) {

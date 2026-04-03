@@ -16,6 +16,33 @@ interface Alert {
   originalTimeSec?: number;
 }
 
+interface RawAlert {
+  data?: string;
+  title?: string;
+  cat?: string;
+  time?: number;
+  cities?: string | string[];
+  threat?: number;
+}
+
+interface HistoryGroup {
+  id?: number | string;
+  alerts?: RawAlert[];
+}
+
+interface FirebaseBet {
+  uid: string;
+  username: string;
+  type: string;
+  description: string;
+  amount: number;
+  multiplier: number;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+  coins_won: number;
+}
+
 type BetScope = "city" | "region" | "general";
 type BetType = "overunder" | "total" | "quiet" | "night";
 
@@ -23,7 +50,7 @@ interface ParsedBetId {
   scope: BetScope;
   type: BetType;
   location: string;
-  direction?: "over" | "under";
+  direction?: "over" | "under" | "yes" | "no";
   threshold?: number;
   minutes?: number;
   min?: number;
@@ -111,24 +138,38 @@ export const REGION_CITIES: Record<string, string[]> = {
 };
 
 function parseBetId(id: string): ParsedBetId | null {
-  const parts = id.split("|");
-  if (parts.length < 3) return null;
-  const [scope, type, location] = parts as [BetScope, BetType, string];
+  try {
+    const parts = id.split("|");
+    if (parts.length < 3) return null;
+    const [scope, type, location] = parts as [BetScope, BetType, string];
 
-  switch (type) {
-    case "overunder":
-      if (parts.length < 5) return null;
-      return { scope, type, location, direction: parts[3] as "over" | "under", threshold: Number(parts[4]) };
-    case "quiet":
-      if (parts.length < 4) return null;
-      return { scope, type, location, minutes: Number(parts[3]) };
-    case "night":
-      return { scope, type, location };
-    case "total":
-      if (parts.length < 5) return null;
-      return { scope, type, location, min: Number(parts[3]), max: parts[4] === "inf" ? null : Number(parts[4]) };
-    default:
-      return null;
+    switch (type) {
+      case "overunder": {
+        if (parts.length < 5) return null;
+        const threshold = Number(parts[4]);
+        if (isNaN(threshold)) return null;
+        return { scope, type, location, direction: parts[3] as "over" | "under", threshold };
+      }
+      case "quiet": {
+        if (parts.length < 4) return null;
+        const minutes = Number(parts[3]);
+        if (isNaN(minutes)) return null;
+        return { scope, type, location, minutes };
+      }
+      case "night":
+        return { scope, type, location, direction: (parts[3] === "no" ? "no" : "yes") };
+      case "total": {
+        if (parts.length < 5) return null;
+        const min = Number(parts[3]);
+        const maxVal = parts[4] === "inf" ? null : Number(parts[4]);
+        if (isNaN(min) || (maxVal !== null && isNaN(maxVal))) return null;
+        return { scope, type, location, min, max: maxVal };
+      }
+      default:
+        return null;
+    }
+  } catch (e) {
+    return null;
   }
 }
 
@@ -153,7 +194,7 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
     
     const activeAlerts: Alert[] = [];
     if (data.active && Array.isArray(data.active)) {
-      data.active.forEach((a: Record<string, unknown>, i: number) => {
+      data.active.forEach((a: RawAlert, i: number) => {
         activeAlerts.push({
           id: `active-${Date.now()}-${i}`,
           areas: a.data ? (Array.isArray(a.data) ? a.data : a.data.split(", ")) : [a.title || "אזור לא ידוע"],
@@ -169,9 +210,9 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
 
     if (data.history && Array.isArray(data.history)) {
-      data.history.forEach((group: Record<string, unknown>) => {
+      data.history.forEach((group: HistoryGroup) => {
         if (group.alerts && Array.isArray(group.alerts)) {
-          group.alerts.forEach((a: Record<string, unknown>, i: number) => {
+          group.alerts.forEach((a: RawAlert, i: number) => {
             const alertTimeSec: number = a.time ?? 0;
             if (alertTimeSec >= todayMidnight) {
               todayCount++;
@@ -199,15 +240,16 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
     // We check all historical alerts to see if any are newer than what we processed last time
     // We only process 'allAlerts' because 'activeAlerts' are live and will eventually be in history too, 
     // but to avoid missed live alerts, we might want to just count history since it's an archive of the day.
-    allAlerts.forEach((alert: Record<string, unknown>) => {
-      if (alert.originalTimeSec > lastProcessedTime) {
-        if (alert.originalTimeSec > maxTimeSeen) {
-          maxTimeSeen = alert.originalTimeSec;
+    allAlerts.forEach((alert: Alert) => {
+      const time = alert.originalTimeSec ?? 0;
+      if (time > lastProcessedTime) {
+        if (time > maxTimeSeen) {
+          maxTimeSeen = time;
         }
         totalNewAlerts++;
         
         // Count cities
-        alert.areas.forEach((city: string) => {
+        (alert.areas as string[]).forEach((city: string) => {
           const sanitizedCity = city.replace(/[.#$[\]]/g, "_"); // Firebase key safe
           newStatsUpdates[`cities/${sanitizedCity}`] = (newStatsUpdates[`cities/${sanitizedCity}`] || 0) + 1;
           
@@ -264,15 +306,15 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
       return;
     }
     
-    const bets = snapshot.val() as Record<string, Record<string, unknown>>;
+    const betsData = snapshot.val() as Record<string, FirebaseBet>;
     const hour = now.getHours();
     
     // Track updates
-    const updates: Record<string, unknown> = {};
+    const updates: Record<string, string | number | null> = {};
     const userWins: Record<string, { coins: number; wins: number }> = {};
     const userLosses: Record<string, number> = {};
 
-    for (const [betId, bet] of Object.entries(bets)) {
+    for (const [betId, bet] of Object.entries(betsData)) {
       let result: "win" | "loss" | null = null;
       const tId = bet.type;
 
@@ -394,19 +436,21 @@ export const resolveBetsJob = onSchedule("every 2 minutes", async (event) => {
       }
 
       if (result) {
-        const winnings = result === "win" ? Math.floor((bet.amount || 0) * (bet.multiplier || 1)) : 0;
+        const winnings = result === "win" ? Math.floor((Number(bet.amount) || 0) * (Number(bet.multiplier) || 1)) : 0;
         updates[`bets/${betId}/status`] = result === "win" ? "won" : "lost";
         updates[`bets/${betId}/resolved_at`] = now.toISOString();
         updates[`bets/${betId}/coins_won`] = winnings;
 
         // Tally user stats
         if (result === "win") {
-          if (!userWins[bet.uid]) userWins[bet.uid] = { coins: 0, wins: 0 };
-          userWins[bet.uid].coins += winnings;
-          userWins[bet.uid].wins++;
+          const uId = String(bet.uid);
+          if (!userWins[uId]) userWins[uId] = { coins: 0, wins: 0 };
+          userWins[uId].coins += winnings;
+          userWins[uId].wins++;
         } else {
-          if (!userLosses[bet.uid]) userLosses[bet.uid] = 0;
-          userLosses[bet.uid]++;
+          const uId = String(bet.uid);
+          if (!userLosses[uId]) userLosses[uId] = 0;
+          userLosses[uId]++;
         }
       }
     }
