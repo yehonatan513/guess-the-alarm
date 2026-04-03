@@ -1,7 +1,7 @@
 import React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
-import { Group } from "@/types";
+import { Group, isGroupMember } from "@/types";
 
 interface Props {
   group: Group | null;
@@ -20,6 +20,11 @@ export const GroupDetailDialog: React.FC<Props> = ({ group, onClose }) => {
   const getGroupMembers = (group: Group) => {
     if (!group.members) return [];
     return Object.entries(group.members)
+      .filter(([uid, m]) => {
+        // Protect against prototype pollution and malformed data
+        if (uid === "__proto__" || uid === "constructor" || uid === "prototype") return false;
+        return isGroupMember(m);
+      })
       .map(([uid, m]) => ({ uid, ...m }))
       .sort((a, b) => b.coins - a.coins);
   };

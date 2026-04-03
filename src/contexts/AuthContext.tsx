@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { User, onAuthStateChanged, signOut } from "firebase/auth";
 import { ref, get, set, update } from "firebase/database";
 import { auth, db } from "@/lib/firebase";
-import { Group } from "@/types";
+import { parseGroupsSnapshot } from "@/types";
 
 interface UserProfile {
   username: string;
@@ -12,6 +12,16 @@ interface UserProfile {
   wins: number;
   losses: number;
   consecutive_wins: number;
+}
+
+function isUserProfile(val: unknown): val is UserProfile {
+  if (!val || typeof val !== "object" || Array.isArray(val)) return false;
+  const v = val as Record<string, unknown>;
+  return (
+    typeof v.username === "string" &&
+    (v.coins === undefined || v.coins === null || (typeof v.coins === "number" && isFinite(v.coins))) &&
+    typeof v.avatar_emoji === "string"
+  );
 }
 
 interface AuthContextType {
@@ -38,16 +48,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = useCallback(async (uid: string) => {
     const snap = await get(ref(db, `users/${uid}`));
     if (snap.exists()) {
-      const data = snap.val() as UserProfile;
+      const raw = snap.val();
+
+      if (!isUserProfile(raw)) {
+        console.warn("Unexpected profile shape from Firebase", raw);
+        setNeedsUsername(true);
+        setProfile(null);
+        return;
+      }
+
+      const data: UserProfile = {
+        username: raw.username,
+        coins: typeof raw.coins === "number" ? raw.coins : 0,
+        avatar_emoji: raw.avatar_emoji,
+        created_at: typeof raw.created_at === "string" ? raw.created_at : "",
+        wins: typeof raw.wins === "number" ? raw.wins : 0,
+        losses: typeof raw.losses === "number" ? raw.losses : 0,
+        consecutive_wins: typeof raw.consecutive_wins === "number" ? raw.consecutive_wins : 0,
+      };
 
       // ── Migration: remove any legacy 'email' from DB ──
-      if ((data as any).email) {
+      if ((raw as any).email) {
         await update(ref(db, `users/${uid}`), { email: null });
       }
 
       // ── Signup bonus: only for brand-new users with no coins yet ──
       const SIGNUP_BONUS = 500_000;
-      if (data.coins === undefined || data.coins === null) {
+      if ((raw as any).coins === undefined || (raw as any).coins === null) {
         await set(ref(db, `users/${uid}/coins`), SIGNUP_BONUS);
         data.coins = SIGNUP_BONUS;
       }
@@ -59,7 +86,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar_emoji: data.avatar_emoji,
         consecutive_wins: data.consecutive_wins || 0,
       });
-      // ──────────────────────────────────────────────────────────────────
 
       setProfile(data);
       setNeedsUsername(false);
@@ -76,6 +102,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateCoins = useCallback(async (newCoins: number) => {
     if (!user || !profile) return;
 
+    // Validate newCoins is a safe finite number
+    if (typeof newCoins !== "number" || !isFinite(newCoins) || newCoins < 0) {
+      console.warn("updateCoins called with invalid value:", newCoins);
+      return;
+    }
+
     // Update user coins
     await set(ref(db, `users/${user.uid}/coins`), newCoins);
     setProfile((prev) => prev ? { ...prev, coins: newCoins } : prev);
@@ -91,10 +123,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const groupsSnap = await get(ref(db, "groups"));
       if (groupsSnap.exists()) {
-        const groups = groupsSnap.val() as Record<string, Group>;
+        const groups = parseGroupsSnapshot(groupsSnap.val());
         const groupUpdates: Record<string, number> = {};
         for (const [groupId, group] of Object.entries(groups)) {
-          if (group.members && group.members[user.uid]) {
+          // Extra guard: skip prototype-polluting keys
+          if (groupId === "__proto__" || groupId === "constructor" || groupId === "prototype") continue;
+          if (
+            group.members &&
+            Object.prototype.hasOwnProperty.call(group.members, user.uid)
+          ) {
             groupUpdates[`groups/${groupId}/members/${user.uid}/coins`] = newCoins;
           }
         }
