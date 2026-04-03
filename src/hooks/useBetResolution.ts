@@ -211,7 +211,7 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
   const profileRef = useRef(profile);
   profileRef.current = profile;
 
-  const runResolution = async () => {
+  const runResolutionFn = async () => {
     if (processingRef.current) return;
     const currentProfile = profileRef.current;
     if (!currentProfile || !user) return;
@@ -315,22 +315,29 @@ export function useBetResolution({ alerts, activeAlerts, todayCount }: BetResolu
     processingRef.current = false;
   };
 
+  const runResolution = useRef(runResolutionFn);
+
+  // Keep ref up to date
+  useEffect(() => {
+    runResolution.current = runResolutionFn;
+  });
+
   // Periodic check every 30s
   useEffect(() => {
-    if (!user) return;
-    runResolution();
-    const interval = setInterval(runResolution, 30000);
+    if (!user?.uid) return;
+    runResolution.current();
+    const interval = setInterval(() => runResolution.current(), 30000);
     return () => clearInterval(interval);
   }, [user?.uid]);
 
   // Also resolve immediately whenever alerts change (with debounce)
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
     if (alerts.length === 0) return;
     
     // Debounce to prevent multiple rapid calls
     const timeout = setTimeout(() => {
-      runResolution();
+      runResolution.current();
     }, 500);
     
     return () => clearTimeout(timeout);
