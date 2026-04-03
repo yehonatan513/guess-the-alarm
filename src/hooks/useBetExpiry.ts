@@ -39,7 +39,7 @@ export function useBetExpiry(bet: Bet) {
     updateExpiry();
     const timer = setInterval(updateExpiry, 1000);
     return () => clearInterval(timer);
-  }, [bet.id, bet.created_at, bet.status]);
+  }, [bet.id, bet.created_at, bet.status, bet.type]);
 
   return expiry;
 }

@@ -56,7 +56,7 @@ const MyBets = () => {
   const [tab, setTab] = useState<"open" | "history">("open");
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
     const betsRef = query(ref(db, "bets"), orderByChild("uid"), equalTo(user.uid));
     const unsub = onValue(betsRef, (snap) => {
       if (snap.exists()) {

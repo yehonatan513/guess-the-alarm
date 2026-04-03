@@ -22,7 +22,8 @@ const TopHeader: React.FC = () => {
       setTimeout(() => setShake(false), 600);
     }
     if (profile) prevCoins.current = profile.coins;
-  }, [profile?.coins]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.coins]); // Only depend on coins changing, profile is handled internally to avoid re-renders when other profile fields change
 
   if (!profile) return null;
 
