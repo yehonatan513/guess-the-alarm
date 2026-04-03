@@ -134,13 +134,13 @@ export function generateBets(
   const locSuffix = loc ? ` ב${loc}` : "";
   const encodeId = (...parts: (string | number)[]) => parts.join("|");
 
-  const locationTodayCount =
+  // Safe lookup with explicit fallback to avoid undefined access
+  const locationTodayCount: number =
     scope === "general" || location === "כללי"
-      ? todayCount
+      ? (typeof todayCount === "number" && Number.isFinite(todayCount) ? todayCount : 0)
       : scope === "city"
-      ? (todayCountByCity[location] ?? 0)
-      : (todayCountByRegion[location] ?? 0);
-      
+      ? (typeof todayCountByCity[location] === "number" ? todayCountByCity[location] ?? 0 : 0)
+      : (typeof todayCountByRegion[location] === "number" ? todayCountByRegion[location] ?? 0 : 0);
 
   switch (type) {
     case "overunder": {
@@ -317,55 +317,91 @@ export function parseBetId(id: string): ParsedBetId | null {
     if (!VALID_TYPES_SET.has(type)) return null;
 
     // Validate location
-    if (typeof location !== "string" || location.length === 0 || location.length > 200 || location.includes("|")) return null;
+    if (typeof location !== "string" || location.length === 0 || location.length > 200) return null;
 
-    const validScope = scope as BetScope;
-    const validType = type as BetType;
+    const betScope = scope as BetScope;
+    const betType = type as BetType;
 
-    switch (validType) {
+    switch (betType) {
       case "overunder": {
         if (parts.length < 5) return null;
         const direction = parts[3];
         if (direction !== "over" && direction !== "under") return null;
-        const threshold = Number(parts[4]);
-        if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1_000_000) return null;
-        return { scope: validScope, type: validType, location, direction, threshold };
+        const rawThreshold = parts[4];
+        // Validate threshold is a safe integer string before parsing
+        if (!/^\d{1,10}$/.test(rawThreshold)) return null;
+        const threshold = Number(rawThreshold);
+        if (!Number.isInteger(threshold) || threshold < 0 || threshold > 1_000_000) return null;
+        return { scope: betScope, type: betType, location, direction, threshold };
       }
       case "quiet": {
         if (parts.length < 4) return null;
-        const minutes = Number(parts[3]);
-        if (!Number.isFinite(minutes) || minutes < 0 || minutes > 10_000) return null;
-        return { scope: validScope, type: validType, location, minutes };
+        const rawMinutes = parts[3];
+        if (!/^\d{1,10}$/.test(rawMinutes)) return null;
+        const minutes = Number(rawMinutes);
+        if (!Number.isInteger(minutes) || minutes < 0 || minutes > 100_000) return null;
+        return { scope: betScope, type: betType, location, minutes };
       }
       case "night": {
-        // Only accept explicit "no"; anything else (including crafted values) defaults to "yes"
-        const direction: "yes" | "no" = parts[3] === "no" ? "no" : "yes";
-        return { scope: validScope, type: validType, location, direction };
+        if (parts.length < 4) return null;
+        const direction = parts[3];
+        if (direction !== "yes" && direction !== "no") return null;
+        return { scope: betScope, type: betType, location, direction };
       }
       case "total": {
         if (parts.length < 5) return null;
-        const min = Number(parts[3]);
-        const maxVal = parts[4] === "inf" ? null : Number(parts[4]);
-        if (!Number.isFinite(min) || min < 0 || min > 1_000_000) return null;
-        if (maxVal !== null && (!Number.isFinite(maxVal) || maxVal < 0 || maxVal > 1_000_000)) return null;
-        return { scope: validScope, type: validType, location, min, max: maxVal };
+        const rawMin = parts[3];
+        const rawMax = parts[4];
+        if (!/^\d{1,10}$/.test(rawMin)) return null;
+        const min = Number(rawMin);
+        if (!Number.isInteger(min) || min < 0 || min > 1_000_000) return null;
+        let max: number | null = null;
+        if (rawMax !== "inf") {
+          if (!/^\d{1,10}$/.test(rawMax)) return null;
+          max = Number(rawMax);
+          if (!Number.isInteger(max) || max < 0 || max > 1_000_000) return null;
+        }
+        return { scope: betScope, type: betType, location, min, max };
       }
       default:
         return null;
     }
-  } catch (e) {
-    console.error("Error parsing bet ID:", id, e);
+  } catch {
     return null;
   }
 }
 
-// Helper used by resolution: does an alert match a location?
+// ── Location matcher (used by resolution hook) ────────────────────────────────
+
 export function alertMatchesLocation(areas: string[], scope: BetScope, location: string): boolean {
-  if (scope === "general" || location === "כללי") return true;
-  if (scope === "city") return areas.some(c => c.includes(location));
-  if (scope === "region") {
-    const cities = REGION_CITIES[location] ?? [];
-    return areas.some(c => cities.some(city => c.includes(city)));
+  // Validate inputs
+  if (!Array.isArray(areas)) return false;
+  if (typeof location !== "string") return false;
+
+  // General scope always matches
+  if (scope === "general") return true;
+
+  // "כללי" location always matches
+  if (location === "כללי") return true;
+
+  if (scope === "city") {
+    // Match if any area starts with the city name (handles sub-area suffixes like " - מזרח")
+    return areas.some(
+      (area) => typeof area === "string" && area.startsWith(location)
+    );
   }
+
+  if (scope === "region") {
+    // Get cities for this region; default to empty array if region not found
+    const regionCities: string[] = Array.isArray(REGION_CITIES[location])
+      ? REGION_CITIES[location]
+      : [];
+    // Match if any alert area belongs to a city in this region
+    return areas.some((area) =>
+      typeof area === "string" &&
+      regionCities.some((city) => area.startsWith(city))
+    );
+  }
+
   return false;
 }
