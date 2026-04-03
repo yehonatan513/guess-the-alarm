@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { CreateGroupDialog } from "@/components/profile/CreateGroupDialog";
 import { JoinGroupDialog } from "@/components/profile/JoinGroupDialog";
 import { GroupDetailDialog } from "@/components/profile/GroupDetailDialog";
+import { Group } from "@/types";
 
 interface LeaderboardEntry {
   uid: string;
@@ -21,13 +22,6 @@ interface LeaderboardData {
   coins: number;
   username: string;
   avatar_emoji: string;
-}
-
-interface Group {
-  id: string;
-  name: string;
-  created_by: string;
-  members: Record<string, { username: string; avatar_emoji: string; coins: number }>;
 }
 
 const formatCoins = (n: number) => {
