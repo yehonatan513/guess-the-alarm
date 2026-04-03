@@ -1,5 +1,5 @@
 import { FirebaseBet } from "../types";
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { ref, push } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,8 +32,8 @@ interface Props {
   onClose: () => void;
 }
 
-
 const QUICK = [1_000_000, 10_000_000, 50_000_000, 100_000_000];
+const MAX_BET_AMOUNT = 1_000_000_000; // 1 billion coins hard cap
 
 const formatNum = (n: number) => n.toLocaleString("he-IL");
 
@@ -41,42 +41,88 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
   const { user, profile, updateCoins } = useAuth();
   const [amount, setAmount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Ref-based guard to prevent race conditions where state update hasn't propagated yet
+  const submittingRef = useRef(false);
 
   if (!bet) return null;
 
   const potential = Math.floor(amount * bet.multiplier);
-  const canBet = amount > 0 && profile && !isSubmitting;
+
+  // Validate amount server-side-style: must be a positive integer within user's balance
+  const isValidAmount =
+    Number.isInteger(amount) &&
+    amount > 0 &&
+    amount <= MAX_BET_AMOUNT &&
+    profile != null &&
+    amount <= profile.coins;
+
+  const canBet = isValidAmount && profile && !isSubmitting;
+
+  const sanitizeAmount = (raw: number): number => {
+    // Clamp to integer, non-negative, within hard cap
+    const floored = Math.floor(raw);
+    if (!isFinite(floored) || floored < 0) return 0;
+    return Math.min(floored, MAX_BET_AMOUNT);
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = Number(e.target.value);
+    setAmount(sanitizeAmount(raw));
+  };
+
+  const handleQuickAmount = (q: number) => {
+    setAmount(sanitizeAmount(q));
+  };
+
+  const handleMaxAmount = () => {
+    if (profile) {
+      setAmount(sanitizeAmount(profile.coins));
+    }
+  };
 
   const handleBet = async () => {
-    if (isSubmitting) return;
-    if (!user || !profile || !canBet) return;
+    // Double-guard: use both ref (synchronous) and state to prevent race conditions
+    if (submittingRef.current || isSubmitting) return;
+    if (!user || !profile) return;
 
-    // Validate amount
+    // Re-validate amount at submission time (guards against any client-side bypass)
     if (!Number.isInteger(amount) || amount <= 0) {
       toast.error("סכום הימור לא תקין");
       return;
     }
-    
+
+    if (amount > MAX_BET_AMOUNT) {
+      toast.error("סכום הימור חורג מהמקסימום המותר");
+      return;
+    }
+
     if (amount > profile.coins) {
       toast.error("אין לך מספיק מטבעות להימור זה");
       return;
     }
 
+    // Atomically set both guards before any async work
+    submittingRef.current = true;
+    setIsSubmitting(true);
+
     // Duplicate check: Same user, same bet id, placed in last 60 minutes
     try {
-      setIsSubmitting(true);
       const recentQuery = query(ref(db, "bets"), orderByChild("uid"), equalTo(user.uid));
       const snap = await get(recentQuery);
       if (snap.exists()) {
         const bets = snap.val();
         const oneHourAgo = Date.now() - 60 * 60 * 1000;
-        const isDuplicate = Object.values(bets).some((b: FirebaseBet) =>
-          b.type === bet.id && 
-          b.status === "open" && 
-          new Date(b.created_at).getTime() > oneHourAgo
-        );
+        const isDuplicate = Object.values(bets).some((b: unknown) => {
+          const fb = b as FirebaseBet;
+          return (
+            fb.type === bet.id &&
+            fb.status === "open" &&
+            new Date(fb.created_at).getTime() > oneHourAgo
+          );
+        });
         if (isDuplicate) {
           toast.error("כבר הצבת הימור זהה בשעה האחרונה");
+          submittingRef.current = false;
           setIsSubmitting(false);
           return;
         }
@@ -103,7 +149,7 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
 
       // 2. Only then deduct coins
       await updateCoins(profile.coins - amount);
-      
+
       toast.success("ההימור נרשם! 🎰", { description: `${formatNum(amount)} מטבעות על ${bet.title}` });
       setAmount(0);
       onClose();
@@ -111,6 +157,7 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
       console.error("Failed to place bet:", error);
       toast.error("שגיאה בעת הצבת הימור");
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -125,7 +172,7 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
           </DialogTitle>
         </DialogHeader>
         <p className="text-muted-foreground text-sm text-right">{bet.description}</p>
-        
+
         {bet.riskLevel && (
           <div className="flex justify-between items-center bg-secondary/30 p-2 rounded-lg text-xs">
             <Badge variant={bet.riskLevel === "גבוה" ? "destructive" : "secondary"} className="font-bold">
@@ -142,7 +189,10 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
             type="number"
             placeholder="כמה מטבעות?"
             value={amount || ""}
-            onChange={(e) => setAmount(Number(e.target.value))}
+            onChange={handleAmountChange}
+            min={1}
+            max={profile ? Math.min(profile.coins, MAX_BET_AMOUNT) : MAX_BET_AMOUNT}
+            step={1}
             className="bg-secondary border-border text-foreground text-center text-lg"
             dir="ltr"
           />
@@ -150,14 +200,14 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
             {QUICK.map((q) => (
               <button
                 key={q}
-                onClick={() => setAmount(q)}
+                onClick={() => handleQuickAmount(q)}
                 className="px-3 py-1.5 bg-secondary rounded-lg text-xs text-foreground font-bold hover:bg-primary/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 {q >= 1_000_000 ? `${q / 1_000_000}M` : formatNum(q)}
               </button>
             ))}
             <button
-              onClick={() => profile && setAmount(profile.coins)}
+              onClick={handleMaxAmount}
               className="px-3 py-1.5 bg-destructive/20 rounded-lg text-xs text-destructive font-bold hover:bg-destructive/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               MAX
