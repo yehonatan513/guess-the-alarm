@@ -9,7 +9,7 @@ interface Alert {
 }
 
 interface RawAlert {
-  data?: string;
+  data?: string | string[];
   title?: string;
   cat?: string;
   time?: number;
