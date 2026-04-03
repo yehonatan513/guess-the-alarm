@@ -17,7 +17,7 @@ export function useBetExpiry(bet: Bet) {
     const updateExpiry = () => {
       const now = new Date().getTime();
       const created = new Date(bet.created_at).getTime();
-      const end = getBetEndTime(bet.id, created); // Note: getBetEndTime takes betId and createdAt
+      const end = getBetEndTime(bet.type, created);
       const remaining = end - now;
 
       if (remaining <= 0) {

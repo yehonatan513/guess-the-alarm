@@ -85,7 +85,6 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
       console.warn("Duplicate check failed, proceeding anyway", e);
     }
 
-    setIsSubmitting(true);
     try {
       // 1. Push bet to DB first
       await push(ref(db, "bets"), {

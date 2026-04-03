@@ -123,7 +123,7 @@ export function generateBets(
       : scope === "city"
       ? (todayCountByCity[location] ?? 0)
       : (todayCountByRegion[location] ?? 0);
-      console.log("locationTodayCount", locationTodayCount, "scope", scope, "location", location, "todayCountByRegion", todayCountByRegion);
+      
 
   switch (type) {
     case "overunder": {
