@@ -47,7 +47,7 @@ const Index = () => {
   }, []);
 
   const filteredCities = useMemo(
-    () => CITIES.filter(c => c.toLowerCase().includes(citySearch.toLowerCase())),
+    () => CITIES.filter(c => c.toLowerCase().includes(citySearch.toLowerCase())).slice(0, 50),
     [citySearch]
   );
 
