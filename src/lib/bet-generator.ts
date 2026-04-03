@@ -95,6 +95,19 @@ const TOTAL_RANGES = [
   { min: 1001, max: null, label: "מעל 1000 אזעקות",   mCity: 40.0,  mRegion: 20.0,  mGeneral: 8.0  },
 ];
 
+// Allowlists for validation
+const VALID_SCOPES: ReadonlySet<string> = new Set(["city", "region", "general"]);
+const VALID_TYPES: ReadonlySet<string> = new Set(["overunder", "total", "quiet", "night"]);
+
+// Multiplier bounds
+const MIN_MULTIPLIER = 1.01;
+const MAX_MULTIPLIER = 500.0;
+
+function clampMultiplier(value: number): number {
+  if (!Number.isFinite(value)) return MIN_MULTIPLIER;
+  return Math.max(MIN_MULTIPLIER, Math.min(MAX_MULTIPLIER, value));
+}
+
 // ── Generator ─────────────────────────────────────────────────────────────────
 
 import { calculateSmartOdds } from "./odds-calculator";
@@ -111,8 +124,12 @@ export function generateBets(
   todayCountByRegion: Record<string, number> = {},
   consecutiveWins: number = 0
 ): GeneratedBet[] {
+  // Input validation
+  if (!VALID_SCOPES.has(scope) || !VALID_TYPES.has(type)) return [];
+  if (typeof location !== "string" || location.length === 0 || location.length > 200) return [];
+
   // Streak penalty: 5% per win, max 25% (0.75x)
-  const streakPenalty = Math.max(0.75, 1.0 - (consecutiveWins * 0.05));
+  const streakPenalty = Math.max(0.75, 1.0 - (Math.max(0, consecutiveWins) * 0.05));
   const loc = location === "כללי" ? "" : location;
   const locSuffix = loc ? ` ב${loc}` : "";
   const encodeId = (...parts: (string | number)[]) => parts.join("|");
@@ -132,12 +149,15 @@ export function generateBets(
         const underMultDefault = scope === "city" ? row.uc : scope === "region" ? row.ur : row.ug;
         const overMultDefault  = scope === "city" ? row.oc : scope === "region" ? row.or : row.og;
         
-        const underMult = calculateSmartOdds({
+        const underMultRaw = calculateSmartOdds({
           stats, scope, location, type: "overunder", defaultMultiplier: underMultDefault, direction: "under", threshold: row.n, todayCount, minutesLeftToday, locationTodayCount, streakPenalty
         });
-        const overMult = calculateSmartOdds({
+        const overMultRaw = calculateSmartOdds({
           stats, scope, location, type: "overunder", defaultMultiplier: overMultDefault, direction: "over", threshold: row.n, todayCount, minutesLeftToday, locationTodayCount, streakPenalty
         });
+
+        const underMult = clampMultiplier(underMultRaw);
+        const overMult = clampMultiplier(overMultRaw);
 
         const group = BET_TYPE_GROUPS.find(g => g.id === "overunder");
 
@@ -172,9 +192,10 @@ export function generateBets(
     case "quiet": {
       return QUIET_DURATIONS.map(({ minutes, mCity, mRegion, mGeneral }) => {
         const defaultMult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
-        const mult = calculateSmartOdds({
+        const multRaw = calculateSmartOdds({
           stats, scope, location, type: "quiet", defaultMultiplier: defaultMult, minutes, todayCount, minutesLeftToday, streakPenalty
         });
+        const mult = clampMultiplier(multRaw);
         
         const group = BET_TYPE_GROUPS.find(g => g.id === "quiet");
 
@@ -198,12 +219,12 @@ export function generateBets(
       const yesMultDefault = scope === "city" ? 4.2 : scope === "region" ? 2.8 : 1.8;
       const noMultDefault = scope === "city" ? 1.05 : scope === "region" ? 1.25 : 2.5;
 
-      const yesMult = calculateSmartOdds({
+      const yesMult = clampMultiplier(calculateSmartOdds({
         stats, scope, location, type: "night", defaultMultiplier: yesMultDefault, direction: "yes", todayCount, minutesLeftToday, streakPenalty
-      });
-      const noMult = calculateSmartOdds({
+      }));
+      const noMult = clampMultiplier(calculateSmartOdds({
         stats, scope, location, type: "night", defaultMultiplier: noMultDefault, direction: "no", todayCount, minutesLeftToday, streakPenalty
-      });
+      }));
 
       const group = BET_TYPE_GROUPS.find(g => g.id === "night");
 
@@ -234,9 +255,10 @@ export function generateBets(
     case "total": {
       return TOTAL_RANGES.map(({ min, max, label, mCity, mRegion, mGeneral }) => {
         const defaultMult = scope === "city" ? mCity : scope === "region" ? mRegion : mGeneral;
-        const mult = calculateSmartOdds({
+        const multRaw = calculateSmartOdds({
           stats, scope, location, type: "total", defaultMultiplier: defaultMult, min, max, todayCount, minutesLeftToday, locationTodayCount, streakPenalty
         });
+        const mult = clampMultiplier(multRaw);
 
         const group = BET_TYPE_GROUPS.find(g => g.id === "total");
 
@@ -277,33 +299,56 @@ export interface ParsedBetId {
   max?: number | null;
 }
 
+const VALID_SCOPES_SET: ReadonlySet<string> = new Set(["city", "region", "general"]);
+const VALID_TYPES_SET: ReadonlySet<string> = new Set(["overunder", "total", "quiet", "night"]);
+
 export function parseBetId(id: string): ParsedBetId | null {
   try {
+    if (typeof id !== "string" || id.length > 500) return null;
     const parts = id.split("|");
     if (parts.length < 3) return null;
-    const [scope, type, location] = parts as [BetScope, BetType, string];
 
-    switch (type) {
+    const scope = parts[0];
+    const type = parts[1];
+    const location = parts[2];
+
+    // Validate scope and type against allowlists
+    if (!VALID_SCOPES_SET.has(scope)) return null;
+    if (!VALID_TYPES_SET.has(type)) return null;
+
+    // Validate location
+    if (typeof location !== "string" || location.length === 0 || location.length > 200 || location.includes("|")) return null;
+
+    const validScope = scope as BetScope;
+    const validType = type as BetType;
+
+    switch (validType) {
       case "overunder": {
         if (parts.length < 5) return null;
+        const direction = parts[3];
+        if (direction !== "over" && direction !== "under") return null;
         const threshold = Number(parts[4]);
-        if (isNaN(threshold)) return null;
-        return { scope, type, location, direction: parts[3] as "over" | "under", threshold };
+        if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1_000_000) return null;
+        return { scope: validScope, type: validType, location, direction, threshold };
       }
       case "quiet": {
         if (parts.length < 4) return null;
         const minutes = Number(parts[3]);
-        if (isNaN(minutes)) return null;
-        return { scope, type, location, minutes };
+        if (!Number.isFinite(minutes) || minutes < 0 || minutes > 10_000) return null;
+        return { scope: validScope, type: validType, location, minutes };
       }
-      case "night":
-        return { scope, type, location, direction: (parts[3] === "no" ? "no" : "yes") };
+      case "night": {
+        // Only accept explicit "no"; anything else (including crafted values) defaults to "yes"
+        const direction: "yes" | "no" = parts[3] === "no" ? "no" : "yes";
+        return { scope: validScope, type: validType, location, direction };
+      }
       case "total": {
         if (parts.length < 5) return null;
         const min = Number(parts[3]);
         const maxVal = parts[4] === "inf" ? null : Number(parts[4]);
-        if (isNaN(min) || (maxVal !== null && isNaN(maxVal))) return null;
-        return { scope, type, location, min, max: maxVal };
+        if (!Number.isFinite(min) || min < 0 || min > 1_000_000) return null;
+        if (maxVal !== null && (!Number.isFinite(maxVal) || maxVal < 0 || maxVal > 1_000_000)) return null;
+        return { scope: validScope, type: validType, location, min, max: maxVal };
       }
       default:
         return null;
@@ -323,47 +368,4 @@ export function alertMatchesLocation(areas: string[], scope: BetScope, location:
     return areas.some(c => cities.some(city => c.includes(city)));
   }
   return false;
-}
-
-// ── Shared Expiry Logic ──────────────────────────────────────────────────────
-
-function getEndOfDay(baseMs: number): number {
-  const d = new Date(baseMs);
-  d.setHours(23, 59, 59, 999); 
-  return d.getTime();
-}
-
-function getNextMorning(baseMs: number): number {
-  const d = new Date(baseMs);
-  if (d.getHours() >= 6) {
-    d.setDate(d.getDate() + 1);
-  }
-  d.setHours(6, 0, 0, 0);
-  return d.getTime();
-}
-
-export function getBetEndTime(betId: string, createdAtMs: number): number {
-  if (betId.includes("|")) {
-    const parsed = parseBetId(betId);
-    if (!parsed) return getEndOfDay(createdAtMs);
-
-    switch (parsed.type) {
-      case "night": return getNextMorning(createdAtMs);
-      case "quiet": return createdAtMs + (parsed.minutes! * 60 * 1000);
-      case "overunder":
-      case "total":
-      default:
-        return getEndOfDay(createdAtMs);
-    }
-  }
-
-  // Static bets
-  switch (betId) {
-    case "b1": return getNextMorning(createdAtMs);
-    case "b4": return createdAtMs + (60 * 60 * 1000);
-    case "b10": return createdAtMs + (5 * 60 * 1000);
-    case "b16": return createdAtMs + (30 * 60 * 1000);
-    // b2, b3, b14, b25, b26 expire at end of day
-    default: return getEndOfDay(createdAtMs);
-  }
 }
