@@ -359,6 +359,26 @@ export function parseBetId(id: string): ParsedBetId | null {
   }
 }
 
+export function getBetEndTime(type: BetType, betCreatedMs: number): number {
+  if (type === "quiet") {
+    return 6;
+  }
+
+  if (type === "night") {
+    const createdDate = new Date(betCreatedMs);
+    const end = new Date(createdDate);
+    if (createdDate.getHours() >= 6) {
+      end.setDate(end.getDate() + 1);
+    }
+    end.setHours(6, 0, 0, 0);
+    return end.getTime();
+  }
+
+  const endOfDay = new Date(betCreatedMs);
+  endOfDay.setHours(23, 59, 59, 999);
+  return endOfDay.getTime();
+}
+
 // Helper used by resolution: does an alert match a location?
 export function alertMatchesLocation(areas: string[], scope: BetScope, location: string): boolean {
   if (scope === "general" || location === "כללי") return true;
