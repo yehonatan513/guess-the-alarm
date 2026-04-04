@@ -103,6 +103,10 @@ const VALID_TYPES: ReadonlySet<string> = new Set(["overunder", "total", "quiet",
 const MIN_MULTIPLIER = 1.01;
 const MAX_MULTIPLIER = 500.0;
 
+// Maximum safe minutes value to prevent integer overflow in ms arithmetic
+// 2^31 - 1 ms ≈ 24.8 days; cap at 1 day (1440 minutes) as a safe upper bound
+const MAX_QUIET_MINUTES = 1440;
+
 function clampMultiplier(value: number): number {
   if (!Number.isFinite(value)) return MIN_MULTIPLIER;
   return Math.max(MIN_MULTIPLIER, Math.min(MAX_MULTIPLIER, value));
@@ -286,6 +290,100 @@ export function generateBets(
   }
 }
 
+// ── Bet end-time helpers ──────────────────────────────────────────────────────
+
+/**
+ * Returns the UTC timestamp (ms) at which a bet of the given type expires,
+ * relative to the moment it was created (createdMs).
+ *
+ * Uses UTC arithmetic throughout to avoid DST / timezone-manipulation issues.
+ * The "day" boundary is defined as UTC midnight; "night" window is 23:00–06:00 UTC.
+ *
+ * @param type      - Must be one of the four valid BetType strings.
+ * @param createdMs - Unix timestamp in milliseconds (must be a safe positive integer).
+ */
+export function getBetEndTime(type: string, createdMs: number): number {
+  // ── Input validation ────────────────────────────────────────────────────────
+  if (!VALID_TYPES.has(type)) {
+    throw new RangeError(`getBetEndTime: invalid type "${type}"`);
+  }
+  if (
+    typeof createdMs !== "number" ||
+    !Number.isFinite(createdMs) ||
+    !Number.isSafeInteger(createdMs) ||
+    createdMs < 0
+  ) {
+    throw new RangeError(`getBetEndTime: createdMs must be a non-negative safe integer, got ${createdMs}`);
+  }
+
+  // ── UTC-based end-of-day (midnight) calculation ─────────────────────────────
+  // All arithmetic is done in UTC to avoid DST transitions and timezone spoofing.
+
+  if (type === "quiet") {
+    // Quiet bets expire after a fixed duration; the duration is encoded in the
+    // bet id, not passed here.  Return end-of-current-UTC-day as a safe default.
+    return getUtcEndOfDay(createdMs);
+  }
+
+  if (type === "night") {
+    // Night window: 23:00 UTC of the current day → 06:00 UTC of the next day.
+    // If we are already past 06:00 UTC, the window is tonight (23:00 → +1 day 06:00).
+    const utcHour = Math.floor((createdMs % 86400000) / 3600000);
+    const startOfDayMs = createdMs - (createdMs % 86400000);
+
+    const NIGHT_END_HOUR_UTC = BET_TIMING.NIGHT_END_HOUR;   // 06
+    const NIGHT_START_HOUR_UTC = BET_TIMING.NIGHT_START_HOUR; // 23
+
+    // If we are in the early-morning window (00:00–06:00), the bet expires at
+    // 06:00 UTC today.
+    if (utcHour < NIGHT_END_HOUR_UTC) {
+      return startOfDayMs + NIGHT_END_HOUR_UTC * 3600000;
+    }
+
+    // Otherwise the bet expires at 06:00 UTC tomorrow (after tonight's 23:00
+    // window opens).
+    return startOfDayMs + 86400000 + NIGHT_END_HOUR_UTC * 3600000;
+  }
+
+  // overunder / total: expire at end of the current UTC day
+  return getUtcEndOfDay(createdMs);
+}
+
+/** Returns the UTC timestamp for 23:59:59.999 of the day containing `ms`. */
+function getUtcEndOfDay(ms: number): number {
+  const startOfDayMs = ms - (ms % 86400000);
+  // End of day = start of next day minus 1 ms
+  return startOfDayMs + 86400000 - 1;
+}
+
+/**
+ * Returns the expiry timestamp (ms) for a quiet bet.
+ *
+ * @param createdMs - Unix timestamp in milliseconds (must be a safe positive integer).
+ * @param minutes   - Duration in minutes (must be a positive integer ≤ MAX_QUIET_MINUTES).
+ */
+export function getQuietBetEndTime(createdMs: number, minutes: number): number {
+  if (
+    typeof createdMs !== "number" ||
+    !Number.isFinite(createdMs) ||
+    !Number.isSafeInteger(createdMs) ||
+    createdMs < 0
+  ) {
+    throw new RangeError(`getQuietBetEndTime: createdMs must be a non-negative safe integer, got ${createdMs}`);
+  }
+  if (
+    typeof minutes !== "number" ||
+    !Number.isInteger(minutes) ||
+    minutes <= 0 ||
+    minutes > MAX_QUIET_MINUTES
+  ) {
+    throw new RangeError(`getQuietBetEndTime: minutes must be a positive integer ≤ ${MAX_QUIET_MINUTES}, got ${minutes}`);
+  }
+  // Safe: minutes ≤ 1440, so minutes * 60 * 1000 ≤ 86_400_000 — well within
+  // Number.MAX_SAFE_INTEGER and cannot overflow.
+  return createdMs + minutes * 60 * 1000;
+}
+
 // ── Parser (used by resolution hook) ─────────────────────────────────────────
 
 export interface ParsedBetId {
@@ -301,10 +399,11 @@ export interface ParsedBetId {
 
 const VALID_SCOPES_SET: ReadonlySet<string> = new Set(["city", "region", "general"]);
 const VALID_TYPES_SET: ReadonlySet<string> = new Set(["overunder", "total", "quiet", "night"]);
+const VALID_DIRECTIONS: ReadonlySet<string> = new Set(["over", "under", "yes", "no"]);
 
 export function parseBetId(id: string): ParsedBetId | null {
   try {
-    if (typeof id !== "string" || id.length > 500) return null;
+    if (typeof id !== "string" || id.length === 0 || id.length > 500) return null;
     const parts = id.split("|");
     if (parts.length < 3) return null;
 
@@ -317,81 +416,66 @@ export function parseBetId(id: string): ParsedBetId | null {
     if (!VALID_TYPES_SET.has(type)) return null;
 
     // Validate location
-    if (typeof location !== "string" || location.length === 0 || location.length > 200 || location.includes("|")) return null;
+    if (typeof location !== "string" || location.length === 0 || location.length > 200) return null;
 
-    const validScope = scope as BetScope;
-    const validType = type as BetType;
+    const base: ParsedBetId = {
+      scope: scope as BetScope,
+      type: type as BetType,
+      location,
+    };
 
-    switch (validType) {
+    switch (type as BetType) {
       case "overunder": {
+        // parts: scope | overunder | location | direction | threshold
         if (parts.length < 5) return null;
         const direction = parts[3];
-        if (direction !== "over" && direction !== "under") return null;
+        if (!VALID_DIRECTIONS.has(direction)) return null;
         const threshold = Number(parts[4]);
         if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1_000_000) return null;
-        return { scope: validScope, type: validType, location, direction, threshold };
+        return {
+          ...base,
+          direction: direction as "over" | "under",
+          threshold,
+        };
       }
+
       case "quiet": {
+        // parts: scope | quiet | location | minutes
         if (parts.length < 4) return null;
         const minutes = Number(parts[3]);
-        if (!Number.isFinite(minutes) || minutes < 0 || minutes > 10_000) return null;
-        return { scope: validScope, type: validType, location, minutes };
+        if (!Number.isInteger(minutes) || minutes <= 0 || minutes > MAX_QUIET_MINUTES) return null;
+        return { ...base, minutes };
       }
+
       case "night": {
-        // Only accept explicit "no"; anything else (including crafted values) defaults to "yes"
-        const direction: "yes" | "no" = parts[3] === "no" ? "no" : "yes";
-        return { scope: validScope, type: validType, location, direction };
+        // parts: scope | night | location | direction
+        if (parts.length < 4) return null;
+        const direction = parts[3];
+        if (direction !== "yes" && direction !== "no") return null;
+        return { ...base, direction: direction as "yes" | "no" };
       }
+
       case "total": {
+        // parts: scope | total | location | min | max
         if (parts.length < 5) return null;
         const min = Number(parts[3]);
-        const maxVal = parts[4] === "inf" ? null : Number(parts[4]);
         if (!Number.isFinite(min) || min < 0 || min > 1_000_000) return null;
-        if (maxVal !== null && (!Number.isFinite(maxVal) || maxVal < 0 || maxVal > 1_000_000)) return null;
-        return { scope: validScope, type: validType, location, min, max: maxVal };
+        const maxRaw = parts[4];
+        let max: number | null;
+        if (maxRaw === "inf") {
+          max = null;
+        } else {
+          const maxNum = Number(maxRaw);
+          if (!Number.isFinite(maxNum) || maxNum < 0 || maxNum > 1_000_000) return null;
+          max = maxNum;
+        }
+        return { ...base, min, max };
       }
+
       default:
         return null;
     }
-  } catch (e) {
-    console.error("Error parsing bet ID:", id, e);
+  } catch {
     return null;
   }
-}
-
-export function getBetEndTime(type: string, createdMs: number): number {
-  const parsed = parseBetId(type);
-
-  if (parsed?.type === "quiet" && parsed.minutes) {
-    return createdMs + parsed.minutes * 60 * 1000;
-  }
-
-  if (parsed?.type === "night") {
-    const createdDate = new Date(createdMs);
-    const endHour = BET_TIMING.NIGHT_END_HOUR;
-    const isAfterEndHour = createdDate.getHours() >= endHour;
-
-    const endDate = new Date(createdDate);
-    if (isAfterEndHour) {
-      endDate.setDate(endDate.getDate() + 1);
-    }
-    endDate.setHours(endHour, 0, 0, 0);
-    return endDate.getTime();
-  }
-
-  // Default for day bets (overunder, total, legacy ids): end of the current day
-  const endOfDay = new Date(createdMs);
-  endOfDay.setHours(23, 59, 59, 999);
-  return endOfDay.getTime();
-}
-
-// Helper used by resolution: does an alert match a location?
-export function alertMatchesLocation(areas: string[], scope: BetScope, location: string): boolean {
-  if (scope === "general" || location === "כללי") return true;
-  if (scope === "city") return areas.some(c => c.includes(location));
-  if (scope === "region") {
-    const cities = REGION_CITIES[location] ?? [];
-    return areas.some(c => cities.some(city => c.includes(city)));
-  }
-  return false;
 }
