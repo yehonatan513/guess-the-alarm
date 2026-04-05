@@ -46,10 +46,21 @@ const Index = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const filteredCities = useMemo(
-    () => CITIES.filter(c => c.toLowerCase().includes(citySearch.toLowerCase())).slice(0, 50),
-    [citySearch]
-  );
+  // Sanitize citySearch: escape regex special characters and limit length to prevent ReDoS
+  const sanitizedCitySearch = useMemo(() => {
+    const trimmed = citySearch.slice(0, 100);
+    return trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }, [citySearch]);
+
+  const filteredCities = useMemo(() => {
+    if (!sanitizedCitySearch) return CITIES.slice(0, 50);
+    try {
+      const re = new RegExp(sanitizedCitySearch);
+      return CITIES.filter(c => re.test(c)).slice(0, 50);
+    } catch {
+      return CITIES.slice(0, 50);
+    }
+  }, [sanitizedCitySearch]);
 
   const locationReady = useMemo(() => {
     if (scope === "general") return true;
@@ -80,6 +91,13 @@ const Index = () => {
     setSelectedType(null);
     setCitySearch("");
   };
+
+  // Safe display of location: only show if it comes from the known lists
+  const safeLocationDisplay = useMemo(() => {
+    if (!location || location === "כללי") return null;
+    if (CITIES.includes(location) || REGIONS.includes(location)) return location;
+    return null;
+  }, [location]);
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -207,9 +225,10 @@ const Index = () => {
                 type="text"
                 placeholder="🔍 חפש עיר..."
                 value={citySearch}
-                onChange={(e) => setCitySearch(e.target.value)}
+                onChange={(e) => setCitySearch(e.target.value.slice(0, 100))}
                 className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 transition-colors"
                 dir="rtl"
+                maxLength={100}
               />
               <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
                 {filteredCities.map((city) => (
@@ -226,8 +245,8 @@ const Index = () => {
                   </button>
                 ))}
               </div>
-              {location && location !== "כללי" && (
-                <p className="text-primary text-xs font-bold text-center">📍 נבחר: {location}</p>
+              {safeLocationDisplay && (
+                <p className="text-primary text-xs font-bold text-center">📍 נבחר: {safeLocationDisplay}</p>
               )}
             </div>
           )}
@@ -305,7 +324,11 @@ const Index = () => {
         </div>
       </div>
 
-      <BetModal bet={selectedBet} open={!!selectedBet} onClose={() => setSelectedBet(null)} />
+      <BetModal
+        bet={selectedBet}
+        open={!!selectedBet}
+        onClose={() => setSelectedBet(null)}
+      />
     </div>
   );
 };

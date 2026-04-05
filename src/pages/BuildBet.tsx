@@ -22,12 +22,31 @@ const BuildBet = () => {
   const [selectedType, setSelectedType] = useState<BetType | null>(null);
   const [selectedBet, setSelectedBet]   = useState<GeneratedBet | null>(null);
 
-  const filteredCities = useMemo(
-    () => CITIES.filter(c => c.includes(citySearch)).slice(0, 50),
-    [citySearch]
-  );
+  // Sanitize citySearch: strip regex special characters to prevent ReDoS,
+  // and limit length to avoid excessive input.
+  const sanitizedCitySearch = useMemo(() => {
+    const trimmed = citySearch.slice(0, 100);
+    // Escape regex special characters so the search is treated as a literal string
+    return trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }, [citySearch]);
 
-  const locationReady = scope === "general" || (!!location && location !== "כללי");
+  const filteredCities = useMemo(() => {
+    if (!sanitizedCitySearch) return CITIES.slice(0, 50);
+    try {
+      const re = new RegExp(sanitizedCitySearch);
+      return CITIES.filter(c => re.test(c)).slice(0, 50);
+    } catch {
+      return CITIES.slice(0, 50);
+    }
+  }, [sanitizedCitySearch]);
+
+  const locationReady = useMemo(() => {
+    if (scope === "general") return true;
+    if (!location || location === "כללי") return false;
+    if (scope === "city") return CITIES.includes(location);
+    if (scope === "region") return REGIONS.includes(location);
+    return false;
+  }, [scope, location]);
 
   const minutesLeftToday = useMemo(() => {
     const now = new Date();
@@ -49,6 +68,13 @@ const BuildBet = () => {
     setSelectedType(null);
     setCitySearch("");
   };
+
+  // Safe display of location: only show if it comes from the known lists
+  const safeLocationDisplay = useMemo(() => {
+    if (!location || location === "כללי") return null;
+    if (CITIES.includes(location) || REGIONS.includes(location)) return location;
+    return null;
+  }, [location]);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -103,9 +129,10 @@ const BuildBet = () => {
               type="text"
               placeholder="🔍 חפש עיר..."
               value={citySearch}
-              onChange={(e) => setCitySearch(e.target.value)}
+              onChange={(e) => setCitySearch(e.target.value.slice(0, 100))}
               className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 transition-colors"
               dir="rtl"
+              maxLength={100}
             />
             <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
               {filteredCities.map((city) => (
@@ -122,9 +149,9 @@ const BuildBet = () => {
                 </button>
               ))}
             </div>
-            {location && location !== "כללי" && (
+            {safeLocationDisplay && (
               <p className="text-primary text-xs font-bold text-center">
-                📍 נבחר: {location}
+                📍 נבחר: {safeLocationDisplay}
               </p>
             )}
           </div>
