@@ -315,57 +315,98 @@ export function parseBetId(id: string): ParsedBetId | null {
     // Validate scope and type against allowlists
     if (!VALID_SCOPES_SET.has(scope)) return null;
     if (!VALID_TYPES_SET.has(type)) return null;
+    if (typeof location !== "string" || location.length === 0 || location.length > 200) return null;
 
-    // Validate location
-    if (typeof location !== "string" || location.length === 0 || location.length > 200 || location.includes("|")) return null;
+    const base = { scope: scope as BetScope, type: type as BetType, location };
 
-    const validScope = scope as BetScope;
-    const validType = type as BetType;
-
-    switch (validType) {
-      case "overunder": {
-        if (parts.length < 5) return null;
-        const direction = parts[3];
-        if (direction !== "over" && direction !== "under") return null;
-        const threshold = Number(parts[4]);
-        if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1_000_000) return null;
-        return { scope: validScope, type: validType, location, direction, threshold };
-      }
-      case "quiet": {
-        if (parts.length < 4) return null;
-        const minutes = Number(parts[3]);
-        if (!Number.isFinite(minutes) || minutes < 0 || minutes > 10_000) return null;
-        return { scope: validScope, type: validType, location, minutes };
-      }
-      case "night": {
-        // Only accept explicit "no"; anything else (including crafted values) defaults to "yes"
-        const direction: "yes" | "no" = parts[3] === "no" ? "no" : "yes";
-        return { scope: validScope, type: validType, location, direction };
-      }
-      case "total": {
-        if (parts.length < 5) return null;
-        const min = Number(parts[3]);
-        const maxVal = parts[4] === "inf" ? null : Number(parts[4]);
-        if (!Number.isFinite(min) || min < 0 || min > 1_000_000) return null;
-        if (maxVal !== null && (!Number.isFinite(maxVal) || maxVal < 0 || maxVal > 1_000_000)) return null;
-        return { scope: validScope, type: validType, location, min, max: maxVal };
-      }
-      default:
-        return null;
+    if (type === "overunder") {
+      if (parts.length < 5) return null;
+      const direction = parts[3];
+      if (direction !== "over" && direction !== "under") return null;
+      const threshold = Number(parts[4]);
+      if (!Number.isFinite(threshold) || threshold < 0) return null;
+      return { ...base, direction, threshold };
     }
-  } catch (e) {
-    console.error("Error parsing bet ID:", id, e);
+
+    if (type === "quiet") {
+      if (parts.length < 4) return null;
+      const minutes = Number(parts[3]);
+      if (!Number.isFinite(minutes) || minutes <= 0) return null;
+      return { ...base, minutes };
+    }
+
+    if (type === "night") {
+      if (parts.length < 4) return null;
+      const direction = parts[3];
+      if (direction !== "yes" && direction !== "no") return null;
+      return { ...base, direction };
+    }
+
+    if (type === "total") {
+      if (parts.length < 5) return null;
+      const min = Number(parts[3]);
+      if (!Number.isFinite(min) || min < 0) return null;
+      const maxRaw = parts[4];
+      const max = maxRaw === "inf" ? null : Number(maxRaw);
+      if (max !== null && (!Number.isFinite(max) || max < 0)) return null;
+      return { ...base, min, max };
+    }
+
+    return null;
+  } catch {
     return null;
   }
 }
 
-// Helper used by resolution: does an alert match a location?
-export function alertMatchesLocation(areas: string[], scope: BetScope, location: string): boolean {
-  if (scope === "general" || location === "כללי") return true;
-  if (scope === "city") return areas.some(c => c.includes(location));
-  if (scope === "region") {
-    const cities = REGION_CITIES[location] ?? [];
-    return areas.some(c => cities.some(city => c.includes(city)));
+// ── Bet end-time calculator ───────────────────────────────────────────────────
+
+/**
+ * Returns the Unix-ms timestamp at which a bet of the given type expires,
+ * relative to the moment it was created (createdMs).
+ *
+ * All boundary calculations are performed in UTC to avoid DST / local-offset
+ * ambiguity.
+ *
+ * @param type      - Must be one of the four valid BetType strings.
+ * @param createdMs - Unix timestamp in milliseconds (must be a safe integer > 0).
+ */
+export function getBetEndTime(type: string, createdMs: number): number {
+  // ── Input validation ────────────────────────────────────────────────────────
+  if (!VALID_TYPES_SET.has(type)) {
+    throw new RangeError(`getBetEndTime: invalid type "${type}". Must be one of: ${[...VALID_TYPES_SET].join(", ")}`);
   }
-  return false;
+  if (
+    typeof createdMs !== "number" ||
+    !Number.isSafeInteger(createdMs) ||
+    createdMs <= 0
+  ) {
+    throw new RangeError(`getBetEndTime: createdMs must be a positive safe integer, got ${createdMs}`);
+  }
+
+  // ── Night bets: end at 06:00 UTC of the same or next day ────────────────────
+  if (type === "night") {
+    // NIGHT_END_HOUR = 6 (UTC)
+    const endHour = BET_TIMING.NIGHT_END_HOUR; // 6
+
+    const createdHourUTC = Math.floor((createdMs % 86_400_000) / 3_600_000);
+
+    // If we are strictly past 06:00 UTC, the night window has already started
+    // for the *next* night, so end at 06:00 UTC tomorrow.
+    // If we are exactly at 06:00 UTC or before, end at 06:00 UTC today.
+    // Using strict > so that a bet created exactly at 06:00:00.000 UTC is
+    // resolved at the boundary of the *current* day (not pushed a full day).
+    const isAfterEndHour = createdHourUTC > endHour;
+
+    // Compute midnight UTC for the creation day, then add endHour hours.
+    const midnightUTC = createdMs - (createdMs % 86_400_000);
+    const endMs = midnightUTC + (isAfterEndHour ? 86_400_000 : 0) + endHour * 3_600_000;
+    return endMs;
+  }
+
+  // ── Day bets (overunder, total, quiet): end at start of next UTC day ────────
+  // Using start-of-next-day (00:00:00.000 UTC) rather than 23:59:59.999 UTC
+  // avoids the 1-millisecond gap and is unambiguous.
+  const midnightUTC = createdMs - (createdMs % 86_400_000);
+  const endOfDayUTC = midnightUTC + 86_400_000; // 00:00:00.000 UTC next day
+  return endOfDayUTC;
 }
