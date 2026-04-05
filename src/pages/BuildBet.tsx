@@ -23,7 +23,7 @@ const BuildBet = () => {
   const [selectedBet, setSelectedBet]   = useState<GeneratedBet | null>(null);
 
   const filteredCities = useMemo(
-    () => CITIES.filter(c => c.includes(citySearch)),
+    () => CITIES.filter(c => c.includes(citySearch)).slice(0, 50),
     [citySearch]
   );
 
