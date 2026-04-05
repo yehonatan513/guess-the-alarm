@@ -359,6 +359,32 @@ export function parseBetId(id: string): ParsedBetId | null {
   }
 }
 
+export function getBetEndTime(type: string, createdMs: number): number {
+  const parsed = parseBetId(type);
+
+  if (parsed?.type === "quiet" && parsed.minutes) {
+    return createdMs + parsed.minutes * 60 * 1000;
+  }
+
+  if (parsed?.type === "night") {
+    const createdDate = new Date(createdMs);
+    const endHour = BET_TIMING.NIGHT_END_HOUR;
+    const isAfterEndHour = createdDate.getHours() >= endHour;
+
+    const endDate = new Date(createdDate);
+    if (isAfterEndHour) {
+      endDate.setDate(endDate.getDate() + 1);
+    }
+    endDate.setHours(endHour, 0, 0, 0);
+    return endDate.getTime();
+  }
+
+  // Default for day bets (overunder, total, legacy ids): end of the current day
+  const endOfDay = new Date(createdMs);
+  endOfDay.setHours(23, 59, 59, 999);
+  return endOfDay.getTime();
+}
+
 // Helper used by resolution: does an alert match a location?
 export function alertMatchesLocation(areas: string[], scope: BetScope, location: string): boolean {
   if (scope === "general" || location === "כללי") return true;
