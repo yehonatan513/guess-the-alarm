@@ -13,6 +13,9 @@ const SCOPE_TABS: { id: BetScope; label: string; icon: string }[] = [
   { id: "general", label: "כללי",  icon: "🌍" },
 ];
 
+// Maximum length for city search input to prevent prototype pollution / DoS
+const MAX_SEARCH_LENGTH = 100;
+
 const BuildBet = () => {
   const { stats } = useAlertStats();
   const { todayCount, todayCountByCity, todayCountByRegion } = useAlertsContext();
@@ -22,10 +25,19 @@ const BuildBet = () => {
   const [selectedType, setSelectedType] = useState<BetType | null>(null);
   const [selectedBet, setSelectedBet]   = useState<GeneratedBet | null>(null);
 
-  const filteredCities = useMemo(
-    () => CITIES.filter(c => c.includes(citySearch)),
-    [citySearch]
-  );
+  const handleCitySearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Truncate input to prevent excessively long strings
+    const raw = e.target.value.slice(0, MAX_SEARCH_LENGTH);
+    setCitySearch(raw);
+  };
+
+  const filteredCities = useMemo(() => {
+    if (!citySearch) return CITIES;
+    // Only allow characters that can appear in Hebrew city names
+    const sanitized = citySearch.replace(/[^\u0590-\u05FF\uFB1D-\uFB4E\s'"\-]/g, "");
+    if (!sanitized) return CITIES;
+    return CITIES.filter(c => c.includes(sanitized));
+  }, [citySearch]);
 
   const locationReady = scope === "general" || (!!location && location !== "כללי");
 
@@ -48,6 +60,15 @@ const BuildBet = () => {
     setLocation(s === "general" ? "כללי" : "");
     setSelectedType(null);
     setCitySearch("");
+  };
+
+  const handleCitySelect = (city: string) => {
+    // Only allow selection of cities that exist in the allowlist
+    if (CITIES.includes(city)) {
+      setLocation(city);
+      setSelectedType(null);
+      setCitySearch("");
+    }
   };
 
   return (
@@ -103,15 +124,17 @@ const BuildBet = () => {
               type="text"
               placeholder="🔍 חפש עיר..."
               value={citySearch}
-              onChange={(e) => setCitySearch(e.target.value)}
+              onChange={handleCitySearchChange}
+              maxLength={MAX_SEARCH_LENGTH}
               className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 transition-colors"
               dir="rtl"
             />
             <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-              {filteredCities.map((city) => (
+              {/* ⚡ Bolt: Slice to max 50 to prevent massive DOM bloat/lag on initial render */}
+              {filteredCities.slice(0, 50).map((city) => (
                 <button
                   key={city}
-                  onClick={() => { setLocation(city); setSelectedType(null); setCitySearch(""); }}
+                  onClick={() => handleCitySelect(city)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 ${
                     location === city
                       ? "bg-primary text-primary-foreground shadow-sm"
@@ -122,7 +145,7 @@ const BuildBet = () => {
                 </button>
               ))}
             </div>
-            {location && location !== "כללי" && (
+            {location && location !== "כללי" && CITIES.includes(location) && (
               <p className="text-primary text-xs font-bold text-center">
                 📍 נבחר: {location}
               </p>

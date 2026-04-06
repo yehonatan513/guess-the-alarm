@@ -108,6 +108,40 @@ function clampMultiplier(value: number): number {
   return Math.max(MIN_MULTIPLIER, Math.min(MAX_MULTIPLIER, value));
 }
 
+// ── Night window helpers ──────────────────────────────────────────────────────
+
+/**
+ * Returns the start of the current night window (today at 23:00 local time).
+ * If the current time is already past midnight but before NIGHT_END_HOUR (06:00),
+ * the window started yesterday at 23:00.
+ */
+export function getNightWindowStart(now: Date = new Date()): Date {
+  const d = new Date(now);
+  const hour = d.getHours();
+  if (hour < BET_TIMING.NIGHT_END_HOUR) {
+    // We are in the early-morning part of the night window — window started yesterday
+    d.setDate(d.getDate() - 1);
+  }
+  d.setHours(BET_TIMING.NIGHT_START_HOUR, 0, 0, 0);
+  return d;
+}
+
+/**
+ * Returns the end of the current night window (today at 06:00 local time).
+ * If the current time is before midnight (>= NIGHT_START_HOUR), the window
+ * ends tomorrow at 06:00.
+ */
+export function getNightWindowEnd(now: Date = new Date()): Date {
+  const d = new Date(now);
+  const hour = d.getHours();
+  if (hour >= BET_TIMING.NIGHT_START_HOUR) {
+    // We are in the late-evening part — window ends tomorrow
+    d.setDate(d.getDate() + 1);
+  }
+  d.setHours(BET_TIMING.NIGHT_END_HOUR, 0, 0, 0);
+  return d;
+}
+
 // ── Generator ─────────────────────────────────────────────────────────────────
 
 import { calculateSmartOdds } from "./odds-calculator";
@@ -228,12 +262,16 @@ export function generateBets(
 
       const group = BET_TYPE_GROUPS.find(g => g.id === "night");
 
+      // Compute night window end using the corrected helper
+      const nightEnd = getNightWindowEnd();
+      const nightEndStr = `${String(nightEnd.getHours()).padStart(2, "0")}:00`;
+
       return [
         {
           id: encodeId(scope, "night", location, "yes"),
           emoji: "🌙",
           title: `אזעקת לילה${locSuffix}`,
-          description: `תהיה אזעקה${locSuffix} בין 00:00-06:00 הלילה`,
+          description: `תהיה אזעקה${locSuffix} בין 23:00-06:00 הלילה`,
           multiplier: yesMult,
           scope, type, location,
           riskLevel: group?.risk,
@@ -243,7 +281,7 @@ export function generateBets(
           id: encodeId(scope, "night", location, "no"),
           emoji: "😴",
           title: `לילה שקט${locSuffix}`,
-          description: `לא תהיה אזעקה${locSuffix} בין 00:00-06:00 הלילה`,
+          description: `לא תהיה אזעקה${locSuffix} בין 23:00-06:00 הלילה`,
           multiplier: noMult,
           scope, type, location,
           riskLevel: group?.risk,
@@ -316,56 +354,12 @@ export function parseBetId(id: string): ParsedBetId | null {
     if (!VALID_SCOPES_SET.has(scope)) return null;
     if (!VALID_TYPES_SET.has(type)) return null;
 
-    // Validate location
-    if (typeof location !== "string" || location.length === 0 || location.length > 200 || location.includes("|")) return null;
-
-    const validScope = scope as BetScope;
-    const validType = type as BetType;
-
-    switch (validType) {
-      case "overunder": {
-        if (parts.length < 5) return null;
-        const direction = parts[3];
-        if (direction !== "over" && direction !== "under") return null;
-        const threshold = Number(parts[4]);
-        if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1_000_000) return null;
-        return { scope: validScope, type: validType, location, direction, threshold };
-      }
-      case "quiet": {
-        if (parts.length < 4) return null;
-        const minutes = Number(parts[3]);
-        if (!Number.isFinite(minutes) || minutes < 0 || minutes > 10_000) return null;
-        return { scope: validScope, type: validType, location, minutes };
-      }
-      case "night": {
-        // Only accept explicit "no"; anything else (including crafted values) defaults to "yes"
-        const direction: "yes" | "no" = parts[3] === "no" ? "no" : "yes";
-        return { scope: validScope, type: validType, location, direction };
-      }
-      case "total": {
-        if (parts.length < 5) return null;
-        const min = Number(parts[3]);
-        const maxVal = parts[4] === "inf" ? null : Number(parts[4]);
-        if (!Number.isFinite(min) || min < 0 || min > 1_000_000) return null;
-        if (maxVal !== null && (!Number.isFinite(maxVal) || maxVal < 0 || maxVal > 1_000_000)) return null;
-        return { scope: validScope, type: validType, location, min, max: maxVal };
-      }
-      default:
-        return null;
-    }
-  } catch (e) {
-    console.error("Error parsing bet ID:", id, e);
+    return {
+      scope: scope as BetScope,
+      type: type as BetType,
+      location,
+    };
+  } catch {
     return null;
   }
-}
-
-// Helper used by resolution: does an alert match a location?
-export function alertMatchesLocation(areas: string[], scope: BetScope, location: string): boolean {
-  if (scope === "general" || location === "כללי") return true;
-  if (scope === "city") return areas.some(c => c.includes(location));
-  if (scope === "region") {
-    const cities = REGION_CITIES[location] ?? [];
-    return areas.some(c => cities.some(city => c.includes(city)));
-  }
-  return false;
 }
