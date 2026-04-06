@@ -19,11 +19,11 @@ const BottomNav = () => {
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
-              className={`flex flex-col items-center gap-0.5 text-xs transition-all duration-200 ${
+              className={`flex flex-col items-center gap-0.5 text-xs transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg px-2 py-1 ${
                 active ? "text-primary scale-110" : "text-muted-foreground scale-100 hover:text-foreground"
               }`}
             >
-              <span className="text-xl">{tab.icon}</span>
+              <span className="text-xl" aria-hidden="true">{tab.icon}</span>
               <span className="font-medium">{tab.label}</span>
             </button>
           );
