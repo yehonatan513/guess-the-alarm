@@ -108,7 +108,8 @@ const BuildBet = () => {
               dir="rtl"
             />
             <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-              {filteredCities.map((city) => (
+              {/* ⚡ Bolt: Slice to max 50 to prevent massive DOM bloat/lag on initial render */}
+              {filteredCities.slice(0, 50).map((city) => (
                 <button
                   key={city}
                   onClick={() => { setLocation(city); setSelectedType(null); setCitySearch(""); }}
