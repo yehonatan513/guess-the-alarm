@@ -369,3 +369,26 @@ export function alertMatchesLocation(areas: string[], scope: BetScope, location:
   }
   return false;
 }
+
+export const BET_TIMING = {
+  END_OF_DAY_HOUR: 23,
+  END_OF_DAY_MINUTE: 59,
+  NIGHT_START_HOUR: 0,
+  NIGHT_END_HOUR: 6,
+} as const;
+
+export function getBetEndTime(type: BetType, createdAt: number): number {
+  const date = new Date(createdAt);
+
+  if (type === "night") {
+    date.setHours(BET_TIMING.NIGHT_END_HOUR, 0, 0, 0);
+    // If created after 6 AM, it applies to the next night
+    if (new Date(createdAt).getHours() >= BET_TIMING.NIGHT_END_HOUR) {
+      date.setDate(date.getDate() + 1);
+    }
+  } else {
+    date.setHours(BET_TIMING.END_OF_DAY_HOUR, BET_TIMING.END_OF_DAY_MINUTE, 59, 999);
+  }
+
+  return date.getTime();
+}
