@@ -23,7 +23,9 @@ const BuildBet = () => {
   const [selectedBet, setSelectedBet]   = useState<GeneratedBet | null>(null);
 
   const filteredCities = useMemo(
-    () => CITIES.filter(c => c.includes(citySearch)),
+    // Optimize performance by limiting rendered DOM nodes to 50 items.
+    // Avoids massive DOM bloat and UI lag when the search is empty.
+    () => CITIES.filter(c => c.includes(citySearch)).slice(0, 50),
     [citySearch]
   );
 

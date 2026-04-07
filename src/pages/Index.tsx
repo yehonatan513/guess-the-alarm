@@ -47,7 +47,9 @@ const Index = () => {
   }, []);
 
   const filteredCities = useMemo(
-    () => CITIES.filter(c => c.toLowerCase().includes(citySearch.toLowerCase())),
+    // Optimize performance by limiting rendered DOM nodes to 50 items.
+    // Avoids massive DOM bloat and UI lag when the search is empty.
+    () => CITIES.filter(c => c.toLowerCase().includes(citySearch.toLowerCase())).slice(0, 50),
     [citySearch]
   );
 
