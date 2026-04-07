@@ -359,6 +359,49 @@ export function parseBetId(id: string): ParsedBetId | null {
   }
 }
 
+// ── Shared Expiry Logic ──────────────────────────────────────────────────────
+
+function getEndOfDay(baseMs: number): number {
+  const d = new Date(baseMs);
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+}
+
+function getNextMorning(baseMs: number): number {
+  const d = new Date(baseMs);
+  if (d.getHours() >= 6) {
+    d.setDate(d.getDate() + 1);
+  }
+  d.setHours(6, 0, 0, 0);
+  return d.getTime();
+}
+
+export function getBetEndTime(betId: string, createdAtMs: number): number {
+  if (betId.includes("|")) {
+    const parsed = parseBetId(betId);
+    if (!parsed) return getEndOfDay(createdAtMs);
+
+    switch (parsed.type) {
+      case "night": return getNextMorning(createdAtMs);
+      case "quiet": return createdAtMs + (parsed.minutes! * 60 * 1000);
+      case "overunder":
+      case "total":
+      default:
+        return getEndOfDay(createdAtMs);
+    }
+  }
+
+  // Static bets
+  switch (betId) {
+    case "b1": return getNextMorning(createdAtMs);
+    case "b4": return createdAtMs + (60 * 60 * 1000);
+    case "b10": return createdAtMs + (5 * 60 * 1000);
+    case "b16": return createdAtMs + (30 * 60 * 1000);
+    // b2, b3, b14, b25, b26 expire at end of day
+    default: return getEndOfDay(createdAtMs);
+  }
+}
+
 // Helper used by resolution: does an alert match a location?
 export function alertMatchesLocation(areas: string[], scope: BetScope, location: string): boolean {
   if (scope === "general" || location === "כללי") return true;
