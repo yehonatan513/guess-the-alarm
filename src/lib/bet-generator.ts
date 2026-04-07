@@ -283,6 +283,9 @@ export function generateBets(
         };
       });
     }
+
+    default:
+      return [];
   }
 }
 
@@ -302,9 +305,23 @@ export interface ParsedBetId {
 const VALID_SCOPES_SET: ReadonlySet<string> = new Set(["city", "region", "general"]);
 const VALID_TYPES_SET: ReadonlySet<string> = new Set(["overunder", "total", "quiet", "night"]);
 
+// Maximum allowed length for a betId string
+const BET_ID_MAX_LENGTH = 300;
+
+// Maximum allowed location string length within a betId
+const LOCATION_MAX_LENGTH = 200;
+
+// Allowed characters in a betId segment (Hebrew, alphanumeric, spaces, hyphens, quotes)
+const LOCATION_SEGMENT_RE = /^[\u0590-\u05FF\uFB1D-\uFB4Fa-zA-Z0-9 '"\-\.]+$/;
+
 export function parseBetId(id: string): ParsedBetId | null {
   try {
-    if (typeof id !== "string" || id.length > 500) return null;
+    // Guard: must be a non-empty string within length limit
+    if (typeof id !== "string" || id.length === 0 || id.length > BET_ID_MAX_LENGTH) return null;
+
+    // Guard: reject any betId that contains characters outside the expected set
+    // The only structural delimiter is "|"; everything else must be safe characters
+    // We split first then validate each segment individually
     const parts = id.split("|");
     if (parts.length < 3) return null;
 
@@ -312,12 +329,18 @@ export function parseBetId(id: string): ParsedBetId | null {
     const type = parts[1];
     const location = parts[2];
 
-    // Validate scope and type against allowlists
+    // Validate scope and type against strict allowlists (prevents prototype pollution
+    // and injection via __proto__, constructor, etc.)
     if (!VALID_SCOPES_SET.has(scope)) return null;
     if (!VALID_TYPES_SET.has(type)) return null;
 
-    // Validate location
-    if (typeof location !== "string" || location.length === 0 || location.length > 200 || location.includes("|")) return null;
+    // Validate location segment
+    if (
+      typeof location !== "string" ||
+      location.length === 0 ||
+      location.length > LOCATION_MAX_LENGTH ||
+      !LOCATION_SEGMENT_RE.test(location)
+    ) return null;
 
     const validScope = scope as BetScope;
     const validType = type as BetType;
@@ -328,44 +351,106 @@ export function parseBetId(id: string): ParsedBetId | null {
         const direction = parts[3];
         if (direction !== "over" && direction !== "under") return null;
         const threshold = Number(parts[4]);
-        if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1_000_000) return null;
+        if (!Number.isInteger(threshold) || threshold < 0 || threshold > 100_000) return null;
         return { scope: validScope, type: validType, location, direction, threshold };
       }
+
       case "quiet": {
         if (parts.length < 4) return null;
         const minutes = Number(parts[3]);
-        if (!Number.isFinite(minutes) || minutes < 0 || minutes > 10_000) return null;
+        if (!Number.isFinite(minutes) || !Number.isInteger(minutes) || minutes < 0 || minutes > 10_000) return null;
         return { scope: validScope, type: validType, location, minutes };
       }
+
       case "night": {
-        // Only accept explicit "no"; anything else (including crafted values) defaults to "yes"
-        const direction: "yes" | "no" = parts[3] === "no" ? "no" : "yes";
+        if (parts.length < 4) return null;
+        const direction = parts[3];
+        if (direction !== "yes" && direction !== "no") return null;
         return { scope: validScope, type: validType, location, direction };
       }
+
       case "total": {
         if (parts.length < 5) return null;
         const min = Number(parts[3]);
-        const maxVal = parts[4] === "inf" ? null : Number(parts[4]);
-        if (!Number.isFinite(min) || min < 0 || min > 1_000_000) return null;
-        if (maxVal !== null && (!Number.isFinite(maxVal) || maxVal < 0 || maxVal > 1_000_000)) return null;
-        return { scope: validScope, type: validType, location, min, max: maxVal };
+        if (!Number.isInteger(min) || min < 0 || min > 100_000) return null;
+        const maxRaw = parts[4];
+        let max: number | null;
+        if (maxRaw === "inf") {
+          max = null;
+        } else {
+          const maxNum = Number(maxRaw);
+          if (!Number.isInteger(maxNum) || maxNum < 0 || maxNum > 100_000) return null;
+          max = maxNum;
+        }
+        return { scope: validScope, type: validType, location, min, max };
       }
+
       default:
         return null;
     }
-  } catch (e) {
-    console.error("Error parsing bet ID:", id, e);
+  } catch {
     return null;
   }
 }
 
-// Helper used by resolution: does an alert match a location?
-export function alertMatchesLocation(areas: string[], scope: BetScope, location: string): boolean {
-  if (scope === "general" || location === "כללי") return true;
-  if (scope === "city") return areas.some(c => c.includes(location));
-  if (scope === "region") {
-    const cities = REGION_CITIES[location] ?? [];
-    return areas.some(c => cities.some(city => c.includes(city)));
+// ── Expiry helpers ────────────────────────────────────────────────────────────
+
+function getEndOfDay(tsMs: number): number {
+  const d = new Date(tsMs);
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+}
+
+/**
+ * Returns the end-time (ms) for a bet.
+ *
+ * SECURITY: createdAtMs must be sourced from a trusted, server-side timestamp.
+ * Never pass a value that originates directly from client-supplied input without
+ * server-side validation, as it controls when bets expire.
+ *
+ * Dynamic expiry (pipe-delimited betId) is intentionally NOT supported here;
+ * expiry is always derived from the bet type and the server-supplied createdAtMs.
+ */
+export function getBetEndTime(betId: string, createdAtMs: number): number {
+  // Validate createdAtMs: must be a finite integer in a plausible range
+  // (between 2020-01-01 and 2100-01-01)
+  const MIN_TS = 1_577_836_800_000; // 2020-01-01 UTC
+  const MAX_TS = 4_102_444_800_000; // 2100-01-01 UTC
+  if (
+    !Number.isFinite(createdAtMs) ||
+    !Number.isInteger(createdAtMs) ||
+    createdAtMs < MIN_TS ||
+    createdAtMs > MAX_TS
+  ) {
+    // Fall back to end of current server day
+    return getEndOfDay(Date.now());
   }
-  return false;
+
+  const parsed = parseBetId(betId);
+  if (!parsed) return getEndOfDay(createdAtMs);
+
+  switch (parsed.type) {
+    case "quiet": {
+      // minutes is already validated (0–10,000) by parseBetId
+      const minutes = parsed.minutes ?? 60;
+      const expiryMs = createdAtMs + minutes * 60 * 1000;
+      // Sanity-check: expiry must not exceed 7 days from creation
+      const MAX_EXPIRY_OFFSET = 7 * 24 * 60 * 60 * 1000;
+      if (expiryMs - createdAtMs > MAX_EXPIRY_OFFSET) return getEndOfDay(createdAtMs);
+      return expiryMs;
+    }
+    case "night": {
+      // Night bets expire at 06:00 the next morning
+      const d = new Date(createdAtMs);
+      d.setHours(6, 0, 0, 0);
+      if (d.getTime() <= createdAtMs) {
+        d.setDate(d.getDate() + 1);
+      }
+      return d.getTime();
+    }
+    case "overunder":
+    case "total":
+    default:
+      return getEndOfDay(createdAtMs);
+  }
 }
