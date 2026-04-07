@@ -1,3 +1,7 @@
-## 2025-02-28 - Bet Modal Accessibility and Polish
-**Learning:** Dialog components often have decorative emojis in their titles that screen readers parse awkwardly ("smiling face with horns, Place Bet"). Also, disabled interactive states (like a submitting button) need clear visual indicators (like a spinner) so users aren't left wondering if their click registered, and custom buttons outside the standard library components often miss critical focus indicators for keyboard users.
-**Action:** Always add `aria-hidden="true"` to purely decorative emojis. Ensure disabled states during async actions always include a visual loading indicator. Make sure all custom interactive elements (like quick-select pills) have `focus-visible` styles matching the design system (`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`).
+## 2025-04-07 - Add accessibility features to custom buttons
+
+**Learning:** Custom UI elements like icon-only buttons (`button` with an emoji or SVG instead of text) need an explicit `aria-label` attribute to properly convey their functionality to screen reader users. Also, custom-styled buttons lacking standard outline styles fail keyboard accessibility without appropriate `focus-visible` styles. Purely decorative icons/emojis in buttons or text should have `aria-hidden="true"` so screen readers don't read them out redundantly, ensuring a cleaner auditory experience.
+**Action:** When building custom icon-only or custom-styled buttons in React/Tailwind, always verify three things:
+1. Is an `aria-label` present?
+2. Are `focus-visible` outline styles defined to support keyboard navigation (e.g. `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`)?
+3. Are pure decorative visuals (like emojis) hidden from screen readers using `aria-hidden="true"`?
