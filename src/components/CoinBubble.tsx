@@ -33,7 +33,7 @@ const TopHeader: React.FC = () => {
         
         {/* Left: Coins */}
         <div className={`flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20 ${shake ? "animate-wiggle" : ""}`}>
-          <span className="text-xl">🪙</span>
+          <span className="text-xl" aria-hidden="true">🪙</span>
           <span className="text-primary font-black text-lg">{formatCoins(profile.coins)}</span>
         </div>
 
@@ -60,16 +60,18 @@ const TopHeader: React.FC = () => {
                 }
               } catch { /* user cancelled share */ }
             }}
-            className="text-lg w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all active:scale-95"
+            aria-label="שתף"
+            className="text-lg w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             title="שתף"
           >
-            🔗
+            <span aria-hidden="true">🔗</span>
           </button>
           <button
             onClick={toggleTheme}
-            className="text-lg w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all active:scale-95"
+            aria-label={theme === "dark" ? "החלף לערכת נושא בהירה" : "החלף לערכת נושא כהה"}
+            className="text-lg w-9 h-9 flex items-center justify-center rounded-lg bg-secondary hover:bg-secondary/70 transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            {theme === "dark" ? "☀️" : "🌙"}
+            <span aria-hidden="true">{theme === "dark" ? "☀️" : "🌙"}</span>
           </button>
         </div>
       </div>
@@ -77,9 +79,9 @@ const TopHeader: React.FC = () => {
       {/* Sub-row for user name / logout */}
       <div className="flex justify-between items-center max-w-lg mx-auto mt-2 px-1">
         <span className="text-muted-foreground text-xs font-bold">
-          {profile.avatar_emoji} {profile.username}
+          <span aria-hidden="true">{profile.avatar_emoji}</span> {profile.username}
         </span>
-        <button onClick={logout} className="text-xs text-muted-foreground underline hover:text-foreground">
+        <button onClick={logout} className="text-xs text-muted-foreground underline hover:text-foreground rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           יציאה
         </button>
       </div>
