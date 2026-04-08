@@ -1,0 +1,7 @@
+## 2024-04-08 - [Massive DOM List Rendering vs Functionality]
+**Learning:** Attempting to optimize large list rendering by simply truncating the array (`.slice(0, 50)`) before mapping is a functional regression. While it makes the initial render faster, it removes the user's ability to browse the full list, forcing them to use search. True list optimizations require virtualization (e.g., `react-window`) or pagination to keep the DOM light while preserving access to all data.
+**Action:** Never truncate data arrays passed to map functions for rendering unless pagination or virtualization is specifically implemented. Opt for non-destructive performance wins like `React.memo` on expensive components first.
+
+## 2024-04-08 - [Memoizing Modals]
+**Learning:** Modals that receive complex props (like the bet object in `BetModal`) but sit inside frequently updating parent components (like `Index` or `BuildBet` which update every minute due to a timer) will cause unnecessary re-renders of the modal's hidden DOM tree even when closed.
+**Action:** Use `React.memo` on modal components to prevent them from re-rendering on every parent state tick unless their specific props (`open`, `bet`) actually change.

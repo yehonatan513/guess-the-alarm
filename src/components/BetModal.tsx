@@ -184,4 +184,5 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
   );
 };
 
-export default BetModal;
+// ⚡ Bolt: Added React.memo to prevent unnecessary re-renders of the modal when parent state changes
+export default React.memo(BetModal);
