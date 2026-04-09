@@ -37,7 +37,7 @@ const QUICK = [1_000_000, 10_000_000, 50_000_000, 100_000_000];
 
 const formatNum = (n: number) => n.toLocaleString("he-IL");
 
-const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
+const BetModal = React.memo<Props>(({ bet, open, onClose }) => {
   const { user, profile, updateCoins } = useAuth();
   const [amount, setAmount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -182,6 +182,9 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
       </DialogContent>
     </Dialog>
   );
-};
+});
+
+// ⚡ Bolt: Provide display name for React DevTools since component is memoized
+BetModal.displayName = 'BetModal';
 
 export default BetModal;
