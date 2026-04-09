@@ -103,6 +103,13 @@ const VALID_TYPES: ReadonlySet<string> = new Set(["overunder", "total", "quiet",
 const MIN_MULTIPLIER = 1.01;
 const MAX_MULTIPLIER = 500.0;
 
+// Maximum safe timestamp (year 9999)
+const MAX_SAFE_TIMESTAMP = 253402300799999;
+
+// Maximum safe minutes value to prevent integer overflow in ms arithmetic
+// 2^53 / (60 * 1000) ≈ 150,323,855,027 — use a practical cap of 1 year in minutes
+const MAX_SAFE_MINUTES = 525960; // 365 days * 24 * 60
+
 function clampMultiplier(value: number): number {
   if (!Number.isFinite(value)) return MIN_MULTIPLIER;
   return Math.max(MIN_MULTIPLIER, Math.min(MAX_MULTIPLIER, value));
@@ -301,6 +308,7 @@ export interface ParsedBetId {
 
 const VALID_SCOPES_SET: ReadonlySet<string> = new Set(["city", "region", "general"]);
 const VALID_TYPES_SET: ReadonlySet<string> = new Set(["overunder", "total", "quiet", "night"]);
+const VALID_DIRECTIONS: ReadonlySet<string> = new Set(["over", "under", "yes", "no"]);
 
 export function parseBetId(id: string): ParsedBetId | null {
   try {
@@ -317,78 +325,128 @@ export function parseBetId(id: string): ParsedBetId | null {
     if (!VALID_TYPES_SET.has(type)) return null;
 
     // Validate location
-    if (typeof location !== "string" || location.length === 0 || location.length > 200 || location.includes("|")) return null;
+    if (typeof location !== "string" || location.length === 0 || location.length > 200) return null;
 
-    const validScope = scope as BetScope;
-    const validType = type as BetType;
-
-    switch (validType) {
-      case "overunder": {
-        if (parts.length < 5) return null;
-        const direction = parts[3];
-        if (direction !== "over" && direction !== "under") return null;
-        const threshold = Number(parts[4]);
-        if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1_000_000) return null;
-        return { scope: validScope, type: validType, location, direction, threshold };
-      }
-      case "quiet": {
-        if (parts.length < 4) return null;
-        const minutes = Number(parts[3]);
-        if (!Number.isFinite(minutes) || minutes < 0 || minutes > 10_000) return null;
-        return { scope: validScope, type: validType, location, minutes };
-      }
-      case "night": {
-        // Only accept explicit "no"; anything else (including crafted values) defaults to "yes"
-        const direction: "yes" | "no" = parts[3] === "no" ? "no" : "yes";
-        return { scope: validScope, type: validType, location, direction };
-      }
-      case "total": {
-        if (parts.length < 5) return null;
-        const min = Number(parts[3]);
-        const maxVal = parts[4] === "inf" ? null : Number(parts[4]);
-        if (!Number.isFinite(min) || min < 0 || min > 1_000_000) return null;
-        if (maxVal !== null && (!Number.isFinite(maxVal) || maxVal < 0 || maxVal > 1_000_000)) return null;
-        return { scope: validScope, type: validType, location, min, max: maxVal };
-      }
-      default:
-        return null;
+    if (type === "overunder") {
+      if (parts.length < 5) return null;
+      const direction = parts[3];
+      if (!VALID_DIRECTIONS.has(direction)) return null;
+      const threshold = Number(parts[4]);
+      if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1e9) return null;
+      return {
+        scope: scope as BetScope,
+        type: type as BetType,
+        location,
+        direction: direction as "over" | "under",
+        threshold,
+      };
     }
-  } catch (e) {
-    console.error("Error parsing bet ID:", id, e);
+
+    if (type === "quiet") {
+      if (parts.length < 4) return null;
+      const minutes = Number(parts[3]);
+      if (!Number.isFinite(minutes) || minutes <= 0 || minutes > MAX_SAFE_MINUTES) return null;
+      return {
+        scope: scope as BetScope,
+        type: type as BetType,
+        location,
+        minutes,
+      };
+    }
+
+    if (type === "night") {
+      if (parts.length < 4) return null;
+      const direction = parts[3];
+      if (!VALID_DIRECTIONS.has(direction)) return null;
+      return {
+        scope: scope as BetScope,
+        type: type as BetType,
+        location,
+        direction: direction as "yes" | "no",
+      };
+    }
+
+    if (type === "total") {
+      if (parts.length < 5) return null;
+      const min = Number(parts[3]);
+      const maxRaw = parts[4];
+      if (!Number.isFinite(min) || min < 0 || min > 1e9) return null;
+      const max = maxRaw === "inf" ? null : Number(maxRaw);
+      if (max !== null && (!Number.isFinite(max) || max < 0 || max > 1e9)) return null;
+      return {
+        scope: scope as BetScope,
+        type: type as BetType,
+        location,
+        min,
+        max,
+      };
+    }
+
+    return null;
+  } catch {
     return null;
   }
 }
 
-// Helper used by resolution: does an alert match a location?
-export function alertMatchesLocation(areas: string[], scope: BetScope, location: string): boolean {
-  if (scope === "general" || location === "כללי") return true;
-  if (scope === "city") return areas.some(c => c.includes(location));
-  if (scope === "region") {
-    const cities = REGION_CITIES[location] ?? [];
-    return areas.some(c => cities.some(city => c.includes(city)));
-  }
-  return false;
-}
-
-export function getBetEndTime(type: string, createdMs: number): number {
-  const parsed = parseBetId(type);
-  if (parsed?.type === "quiet" && parsed.minutes) {
-    return createdMs + parsed.minutes * 60 * 1000;
+/**
+ * Returns the end timestamp (ms) for a bet given its ID and creation time.
+ * Uses UTC-based arithmetic for night bets to avoid timezone-dependent behaviour.
+ */
+export function getBetEndTime(id: string, createdMs: number): number {
+  // Validate createdMs
+  if (
+    typeof createdMs !== "number" ||
+    !Number.isFinite(createdMs) ||
+    createdMs < 0 ||
+    createdMs > MAX_SAFE_TIMESTAMP
+  ) {
+    throw new RangeError("Invalid createdMs timestamp");
   }
 
-  const createdDate = new Date(createdMs);
-  const endDate = new Date(createdDate);
+  const parsed = parseBetId(id);
+  if (!parsed) throw new Error("Invalid bet ID");
 
-  if (parsed?.type === "night" || type === "b1") {
+  // Night bet: ends at 06:00 local time (same day if before 06:00, next day otherwise)
+  // Use local-time methods consistently so behaviour matches the UI.
+  if (parsed.type === "night") {
+    const createdDate = new Date(createdMs);
+    const endDate = new Date(createdMs);
     if (createdDate.getHours() < BET_TIMING.NIGHT_END_HOUR) {
       endDate.setHours(BET_TIMING.NIGHT_END_HOUR, 0, 0, 0);
     } else {
       endDate.setDate(endDate.getDate() + 1);
       endDate.setHours(BET_TIMING.NIGHT_END_HOUR, 0, 0, 0);
     }
-    return endDate.getTime();
+    const result = endDate.getTime();
+    if (!Number.isFinite(result) || result > MAX_SAFE_TIMESTAMP) {
+      throw new RangeError("Computed end time is out of range");
+    }
+    return result;
   }
 
-  endDate.setHours(23, 59, 59, 999);
-  return endDate.getTime();
+  // Quiet bet: ends createdMs + minutes * 60 * 1000
+  if (parsed.type === "quiet") {
+    const minutes = parsed.minutes ?? 0;
+    // minutes is already validated in parseBetId (<= MAX_SAFE_MINUTES)
+    const deltaMs = minutes * 60 * 1000;
+    const result = createdMs + deltaMs;
+    if (!Number.isFinite(result) || result > MAX_SAFE_TIMESTAMP) {
+      throw new RangeError("Computed end time is out of range");
+    }
+    return result;
+  }
+
+  // Daily bets (overunder / total): end at 23:59:59.999 local time on the creation day
+  const createdDate = new Date(createdMs);
+  const endDate = new Date(createdMs);
+  endDate.setHours(BET_TIMING.DAY_END_HOUR, 59, 59, 999);
+  // If somehow the end is before creation (e.g. created after 23:59:59), advance one day
+  if (endDate.getTime() <= createdDate.getTime()) {
+    endDate.setDate(endDate.getDate() + 1);
+  }
+  const result = endDate.getTime();
+  if (!Number.isFinite(result) || result > MAX_SAFE_TIMESTAMP) {
+    throw new RangeError("Computed end time is out of range");
+  }
+  return result;
 }
