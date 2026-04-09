@@ -12,6 +12,9 @@ import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { he } from "date-fns/locale";
 
+const MAX_CITY_SEARCH_LENGTH = 100;
+const CITIES_PAGE_SIZE = 50;
+
 const SCOPE_TABS: { id: BetScope; label: string; icon: string }[] = [
   { id: "city",    label: "עיר",   icon: "🏙️" },
   { id: "region",  label: "אזור",  icon: "🗺️" },
@@ -32,7 +35,7 @@ const Index = () => {
   const [selectedBet, setSelectedBet] = useState<GeneratedBet | null>(null);
 
   // ⚡ Bolt: Pagination state for large lists to prevent DOM bloat
-  const [visibleCities, setVisibleCities] = useState(50);
+  const [visibleCities, setVisibleCities] = useState(CITIES_PAGE_SIZE);
 
   const [minutesLeftToday, setMinutesLeftToday] = useState(0);
 
@@ -56,14 +59,24 @@ const Index = () => {
 
   // ⚡ Bolt: Reset pagination when search changes
   useEffect(() => {
-    setVisibleCities(50);
+    setVisibleCities(CITIES_PAGE_SIZE);
   }, [citySearch, scope]);
 
   // ⚡ Bolt: Handle scroll to load more cities
   const handleCitiesScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
     if (scrollHeight - scrollTop <= clientHeight * 1.5) {
-      setVisibleCities(prev => Math.min(prev + 50, filteredCities.length));
+      setVisibleCities(prev => {
+        const next = prev + CITIES_PAGE_SIZE;
+        return next > filteredCities.length ? filteredCities.length : next;
+      });
+    }
+  };
+
+  const handleCitySearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value.length <= MAX_CITY_SEARCH_LENGTH) {
+      setCitySearch(value);
     }
   };
 
@@ -96,6 +109,9 @@ const Index = () => {
     setSelectedType(null);
     setCitySearch("");
   };
+
+  // Safe slice: clamp visibleCities to valid bounds
+  const safeVisibleCities = Math.max(0, Math.min(visibleCities, filteredCities.length));
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -223,12 +239,13 @@ const Index = () => {
                 type="text"
                 placeholder="🔍 חפש עיר..."
                 value={citySearch}
-                onChange={(e) => setCitySearch(e.target.value)}
+                onChange={handleCitySearchChange}
+                maxLength={MAX_CITY_SEARCH_LENGTH}
                 className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 transition-colors"
                 dir="rtl"
               />
               <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto" onScroll={handleCitiesScroll}>
-                {filteredCities.slice(0, visibleCities).map((city) => (
+                {filteredCities.slice(0, safeVisibleCities).map((city) => (
                   <button
                     key={city}
                     onClick={() => { setLocation(city); setCitySearch(""); }}
@@ -277,51 +294,14 @@ const Index = () => {
               </p>
             </div>
           )}
-
-          {/* Step 4: Generated bets */}
-          {selectedType && locationReady && bets.length > 0 && (
-            <div className="space-y-2 animate-slideInUp">
-              <p className="text-muted-foreground text-xs font-semibold">
-                {scope === "general" ? "שלב 3" : "שלב 4"} — בחר הימור
-              </p>
-              <div className="space-y-2">
-                {bets.map((bet, i) => {
-                  const isLocked = bet.multiplier === -1;
-                  return (
-                    <button
-                      key={bet.id}
-                      onClick={() => !isLocked && setSelectedBet(bet)}
-                      className={`w-full bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between transition-all duration-150 animate-fadeIn ${
-                        isLocked
-                          ? "opacity-40 cursor-not-allowed"
-                          : "hover:border-primary/60 hover:bg-primary/5 active:scale-98"
-                      }`}
-                      style={{ animationDelay: `${i * 35}ms` }}
-                      disabled={isLocked}
-                    >
-                      {isLocked ? (
-                        <span className="text-xs text-muted-foreground font-bold">הוכרע היום ✓</span>
-                      ) : (
-                        <span className="bg-primary/15 text-primary font-black text-sm px-2 py-0.5 rounded-md">
-                          x{bet.multiplier}
-                        </span>
-                      )}
-                      <div className="text-right">
-                        <p className="text-foreground text-sm font-bold">
-                          {bet.emoji} {bet.title}
-                        </p>
-                        <p className="text-muted-foreground text-xs mt-0.5">{bet.description}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      <BetModal bet={selectedBet} open={!!selectedBet} onClose={() => setSelectedBet(null)} />
+      <BetModal
+        bet={selectedBet}
+        open={!!selectedBet}
+        onClose={() => setSelectedBet(null)}
+      />
     </div>
   );
 };
