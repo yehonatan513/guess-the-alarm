@@ -22,10 +22,26 @@ const BuildBet = () => {
   const [selectedType, setSelectedType] = useState<BetType | null>(null);
   const [selectedBet, setSelectedBet]   = useState<GeneratedBet | null>(null);
 
+  // ⚡ Bolt: Pagination state for large lists to prevent DOM bloat
+  const [visibleCities, setVisibleCities] = useState(50);
+
   const filteredCities = useMemo(
     () => CITIES.filter(c => c.includes(citySearch)),
     [citySearch]
   );
+
+  // ⚡ Bolt: Reset pagination when search changes
+  React.useEffect(() => {
+    setVisibleCities(50);
+  }, [citySearch, scope]);
+
+  // ⚡ Bolt: Handle scroll to load more cities
+  const handleCitiesScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight * 1.5) {
+      setVisibleCities(prev => Math.min(prev + 50, filteredCities.length));
+    }
+  };
 
   const locationReady = scope === "general" || (!!location && location !== "כללי");
 
@@ -107,8 +123,8 @@ const BuildBet = () => {
               className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60 transition-colors"
               dir="rtl"
             />
-            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-              {filteredCities.map((city) => (
+            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto" onScroll={handleCitiesScroll}>
+              {filteredCities.slice(0, visibleCities).map((city) => (
                 <button
                   key={city}
                   onClick={() => { setLocation(city); setSelectedType(null); setCitySearch(""); }}
