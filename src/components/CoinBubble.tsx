@@ -9,6 +9,22 @@ const formatCoins = (n: number): string => {
   return n.toLocaleString("he-IL");
 };
 
+/** Sanitize a string so it is safe to render as plain text (no HTML injection). */
+const sanitizeText = (value: unknown): string => {
+  if (typeof value !== "string") return "";
+  return value.replace(/[<>&"'`]/g, (c) => {
+    switch (c) {
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case "&": return "&amp;";
+      case "\"": return "&quot;";
+      case "'": return "&#x27;";
+      case "`": return "&#x60;";
+      default: return c;
+    }
+  });
+};
+
 const TopHeader: React.FC = () => {
   const { profile, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -25,7 +41,20 @@ const TopHeader: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.coins]); // Only depend on coins changing, profile is handled internally to avoid re-renders when other profile fields change
 
+  // Guard: do not render anything if the user is not authenticated / profile is absent
   if (!profile) return null;
+
+  const safeUsername = sanitizeText(profile.username);
+  const safeAvatarEmoji = sanitizeText(profile.avatar_emoji);
+  const formattedCoins = formatCoins(profile.coins);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      // logout errors are non-critical; silently ignore
+    }
+  };
 
   return (
     <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b border-border px-4 py-3">
@@ -34,7 +63,13 @@ const TopHeader: React.FC = () => {
         {/* Left: Coins */}
         <div className={`flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-full border border-primary/20 ${shake ? "animate-wiggle" : ""}`}>
           <span className="text-xl" aria-hidden="true">🪙</span>
-          <span className="text-primary font-black text-lg" aria-label={`יש לך ${formatCoins(profile.coins)} מטבעות`}>{formatCoins(profile.coins)}</span>
+          {/* aria-label is built from already-sanitized, numeric-derived text — no raw user input */}
+          <span
+            className="text-primary font-black text-lg"
+            aria-label={`יש לך ${formattedCoins} מטבעות`}
+          >
+            {formattedCoins}
+          </span>
         </div>
 
         {/* Center: Title */}
@@ -77,12 +112,16 @@ const TopHeader: React.FC = () => {
         </div>
       </div>
       
-      {/* Sub-row for user name / logout */}
+      {/* Sub-row for user name / logout — only rendered when profile is confirmed non-null (see guard above) */}
       <div className="flex justify-between items-center max-w-lg mx-auto mt-2 px-1">
         <span className="text-muted-foreground text-xs font-bold">
-          <span aria-hidden="true">{profile.avatar_emoji}</span> {profile.username}
+          {/* Render sanitized emoji and username as plain text children — React escapes these automatically */}
+          <span aria-hidden="true">{safeAvatarEmoji}</span> {safeUsername}
         </span>
-        <button onClick={logout} className="text-xs text-muted-foreground underline hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded px-1">
+        <button
+          onClick={handleLogout}
+          className="text-xs text-muted-foreground underline hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded px-1"
+        >
           יציאה
         </button>
       </div>
