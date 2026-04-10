@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   CITIES, REGIONS, BET_TYPE_GROUPS, generateBets,
   BetScope, BetType, GeneratedBet
@@ -49,6 +49,8 @@ const BuildBet = () => {
     setSelectedType(null);
     setCitySearch("");
   };
+
+  const handleCloseModal = useCallback(() => setSelectedBet(null), []);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -231,7 +233,7 @@ const BuildBet = () => {
       <BetModal
         bet={selectedBet}
         open={!!selectedBet}
-        onClose={() => setSelectedBet(null)}
+        onClose={handleCloseModal}
       />
     </div>
   );

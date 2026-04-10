@@ -37,7 +37,10 @@ const QUICK = [1_000_000, 10_000_000, 50_000_000, 100_000_000];
 
 const formatNum = (n: number) => n.toLocaleString("he-IL");
 
-const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
+// ⚡ Bolt Optimization: Memoize BetModal to prevent unnecessary re-renders
+// when parent components (like Index or BuildBet) update frequently
+// due to real-time countdowns or active input fields (like city search).
+const BetModal: React.FC<Props> = React.memo<Props>(({ bet, open, onClose }) => {
   const { user, profile, updateCoins } = useAuth();
   const [amount, setAmount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -182,6 +185,6 @@ const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
       </DialogContent>
     </Dialog>
   );
-};
+});
 
 export default BetModal;

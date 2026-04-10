@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/App";
 import { useAlertsContext } from "@/contexts/AlertsContext";
@@ -80,6 +80,8 @@ const Index = () => {
     setSelectedType(null);
     setCitySearch("");
   };
+
+  const handleCloseModal = useCallback(() => setSelectedBet(null), []);
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -305,7 +307,7 @@ const Index = () => {
         </div>
       </div>
 
-      <BetModal bet={selectedBet} open={!!selectedBet} onClose={() => setSelectedBet(null)} />
+      <BetModal bet={selectedBet} open={!!selectedBet} onClose={handleCloseModal} />
     </div>
   );
 };
