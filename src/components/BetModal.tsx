@@ -1,6 +1,6 @@
 import { FirebaseBet } from "../types";
-import React, { useState } from "react";
-import { ref, push } from "firebase/database";
+import React, { useState, useCallback, useRef } from "react";
+import { ref, push, runTransaction } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -40,10 +40,17 @@ const formatNum = (n: number) => n.toLocaleString("he-IL");
 // ⚡ Bolt Optimization: Memoize BetModal to prevent unnecessary re-renders
 // when parent components (like Index or BuildBet) update frequently
 // due to real-time countdowns or active input fields (like city search).
-const BetModal: React.FC<Props> = React.memo<Props>(({ bet, open, onClose }) => {
+const BetModal: React.FC<Props> = ({ bet, open, onClose }) => {
   const { user, profile, updateCoins } = useAuth();
   const [amount, setAmount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Use a ref to prevent double-submission even across async gaps
+  const submittingRef = useRef(false);
+
+  const handleCloseModal = useCallback(() => {
+    setAmount(0);
+    onClose();
+  }, [onClose]);
 
   if (!bet) return null;
 
@@ -51,35 +58,44 @@ const BetModal: React.FC<Props> = React.memo<Props>(({ bet, open, onClose }) => 
   const canBet = amount > 0 && profile && !isSubmitting;
 
   const handleBet = async () => {
-    if (isSubmitting) return;
-    if (!user || !profile || !canBet) return;
+    // Guard against double-submission using both state and ref
+    if (submittingRef.current || isSubmitting) return;
+
+    // Re-read auth state at call time to avoid stale closure issues
+    if (!user || !profile) {
+      toast.error("יש להתחבר כדי להמר");
+      return;
+    }
 
     // Validate amount
     if (!Number.isInteger(amount) || amount <= 0) {
       toast.error("סכום הימור לא תקין");
       return;
     }
-    
+
     if (amount > profile.coins) {
       toast.error("אין לך מספיק מטבעות להימור זה");
       return;
     }
 
+    submittingRef.current = true;
+    setIsSubmitting(true);
+
     // Duplicate check: Same user, same bet id, placed in last 60 minutes
     try {
-      setIsSubmitting(true);
       const recentQuery = query(ref(db, "bets"), orderByChild("uid"), equalTo(user.uid));
       const snap = await get(recentQuery);
       if (snap.exists()) {
         const bets = snap.val();
         const oneHourAgo = Date.now() - 60 * 60 * 1000;
         const isDuplicate = Object.values(bets).some((b: FirebaseBet) =>
-          b.type === bet.id && 
-          b.status === "open" && 
+          b.type === bet.id &&
+          b.status === "open" &&
           new Date(b.created_at).getTime() > oneHourAgo
         );
         if (isDuplicate) {
           toast.error("כבר הצבת הימור זהה בשעה האחרונה");
+          submittingRef.current = false;
           setIsSubmitting(false);
           return;
         }
@@ -89,24 +105,66 @@ const BetModal: React.FC<Props> = React.memo<Props>(({ bet, open, onClose }) => 
     }
 
     try {
-      // 1. Push bet to DB first
-      await push(ref(db, "bets"), {
-        uid: user.uid,
-        username: profile.username,
-        type: bet.id,
-        description: bet.title,
-        area: "",
-        amount,
-        multiplier: bet.multiplier,
-        status: "open",
-        coins_won: 0,
-        created_at: new Date().toISOString(),
-        resolved_at: null,
+      // Capture uid and username at submission time to avoid acting on behalf of wrong user
+      const submittingUid = user.uid;
+      const submittingUsername = profile.username;
+      const submittingCoins = profile.coins;
+
+      // Sanity check: ensure the uid hasn't changed between render and submission
+      if (!submittingUid || !submittingUsername) {
+        toast.error("שגיאת אימות, נסה שוב");
+        return;
+      }
+
+      // Use a transaction to atomically deduct coins and push the bet,
+      // preventing race conditions where two concurrent submissions
+      // could both read the same coin balance.
+      let betKey: string | null = null;
+
+      // 1. Deduct coins atomically via transaction
+      const coinsRef = ref(db, `users/${submittingUid}/coins`);
+      const txResult = await runTransaction(coinsRef, (currentCoins: number | null) => {
+        const coins = currentCoins ?? submittingCoins;
+        if (coins < amount) {
+          // Abort transaction
+          return undefined;
+        }
+        return coins - amount;
       });
 
-      // 2. Only then deduct coins
-      await updateCoins(profile.coins - amount);
-      
+      if (!txResult.committed) {
+        toast.error("אין לך מספיק מטבעות להימור זה");
+        return;
+      }
+
+      // 2. Push bet to DB after coins are deducted
+      try {
+        const newBetRef = await push(ref(db, "bets"), {
+          uid: submittingUid,
+          username: submittingUsername,
+          type: bet.id,
+          description: bet.title,
+          area: "",
+          amount,
+          multiplier: bet.multiplier,
+          status: "open",
+          coins_won: 0,
+          created_at: new Date().toISOString(),
+          resolved_at: null,
+        });
+        betKey = newBetRef.key;
+      } catch (pushError) {
+        // Bet push failed — refund coins via transaction
+        console.error("Bet push failed, refunding coins", pushError);
+        await runTransaction(coinsRef, (currentCoins: number | null) => {
+          return (currentCoins ?? 0) + amount;
+        });
+        throw pushError;
+      }
+
+      // 3. Sync local coin state with the committed value
+      await updateCoins(submittingCoins - amount);
+
       toast.success("ההימור נרשם! 🎰", { description: `${formatNum(amount)} מטבעות על ${bet.title}` });
       setAmount(0);
       onClose();
@@ -114,12 +172,13 @@ const BetModal: React.FC<Props> = React.memo<Props>(({ bet, open, onClose }) => 
       console.error("Failed to place bet:", error);
       toast.error("שגיאה בעת הצבת הימור");
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={() => { setAmount(0); onClose(); }}>
+    <Dialog open={open} onOpenChange={handleCloseModal}>
       <DialogContent className="bg-card border-border max-w-sm mx-auto">
         <DialogHeader>
           <DialogTitle className="text-foreground text-right">
@@ -185,6 +244,6 @@ const BetModal: React.FC<Props> = React.memo<Props>(({ bet, open, onClose }) => 
       </DialogContent>
     </Dialog>
   );
-});
+};
 
 export default BetModal;
