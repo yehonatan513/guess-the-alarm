@@ -369,3 +369,31 @@ export function alertMatchesLocation(areas: string[], scope: BetScope, location:
   }
   return false;
 }
+
+export function getBetEndTime(type: string, createdMs: number): number {
+  const d = new Date(createdMs);
+
+  const parsed = parseBetId(type);
+  const typeStr = parsed ? parsed.type : type;
+
+  if (typeStr === "night") {
+    // Expires at end of next night window (6 AM)
+    const end = new Date(d);
+    end.setHours(BET_TIMING.NIGHT_END_HOUR, 0, 0, 0);
+    if (end.getTime() <= d.getTime()) {
+      end.setDate(end.getDate() + 1);
+    }
+    return end.getTime();
+  }
+
+  if (typeStr === "quiet") {
+    const minutes = parsed?.minutes ?? 60; // fallback
+    const end = new Date(d.getTime() + minutes * 60 * 1000);
+    return end.getTime();
+  }
+
+  // Default to end of day (23:59:59.999)
+  const eod = new Date(d);
+  eod.setHours(23, 59, 59, 999);
+  return eod.getTime();
+}
